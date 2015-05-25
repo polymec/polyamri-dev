@@ -24,8 +24,8 @@ typedef enum
 struct amr_grid_level_t
 {
   bbox_t domain;
-  int nx, ny, nz, tx, ty, tz, ng;
-  patch_type_t* patch_types, num_patches;
+  int nx, ny, nz, tx, ty, tz, ng, num_patches;
+  patch_type_t* patch_types;
   amr_grid_interpolator_t** interpolators;
   bool x_periodic, y_periodic, z_periodic;
 
@@ -60,6 +60,7 @@ amr_grid_level_t* amr_grid_level_new(bbox_t* domain,
   level->ty = ty;
   level->tz = tz;
   level->ng = num_ghosts;
+  level->num_patches = 0;
   level->x_periodic = periodic_in_x;
   level->y_periodic = periodic_in_y;
   level->z_periodic = periodic_in_z;
