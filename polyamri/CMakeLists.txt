@@ -9,8 +9,8 @@ add_library(polyamri polyamri.c amr_patch.c amr_patch_set.c amr_grid_level.c
 #            interpreter_register_amr_functions.c)
 add_dependencies(polyamri update_polyamri_c)
 
-set(POLYAMRI_LIBS polyamri;${POLYMEC_LIBS} PARENT_SCOPE)
-set(POLYAMRI_LIBS polyamri;${POLYMEC_LIBS})
+set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES} PARENT_SCOPE)
+set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES})
 
 add_subdirectory(tests)
 
