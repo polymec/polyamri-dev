@@ -1,0 +1,28 @@
+# OS generated files
+.DS_Store
+
+# Editor backup files
+*~
+.*.swp
+
+# Binary files.
+*.pdf
+*.tar.gz
+*.h5
+*.he5
+*.stl
+*.ddl
+*.wri
+*.silo
+
+# Generated files
+build/
+
+# Documentation kibble.
+docs/*.aux
+docs/*.bbl
+docs/*.blg
+docs/*.idx
+docs/*.log
+docs/*.pdf
+

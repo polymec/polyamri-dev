@@ -1,0 +1,4 @@
+Polyamri (the Polymec Adaptive Mesh Refinement Interface) is an extension to 
+the Polymec library that adds features for easily creating applications that 
+use finite volume methods on adaptively refined block-structured grids. See 
+the INSTALL file for details on installation.
