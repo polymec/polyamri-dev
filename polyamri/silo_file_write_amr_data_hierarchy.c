@@ -7,10 +7,13 @@
 
 #include "polyamri/write_silo_data_hierarchy.h"
 
-void write_silo_data_hierarchy(DBfile* file, data_hierarchy_t* hierarchy)
+void silo_file_write_amr_data_hierarchy(silo_file_t* file, 
+                                        const char* hierarchy_name,
+                                        amr_data_hierarchy_t* hierarchy,
+                                        silo_field_metadata_t** field_metadata)
 {
   // Create a new MRG tree that can hold an AMR hierarchy.
-  int num_levels = data_hierarchy_num_levels(hierarchy);
+  int num_levels = amr_data_hierarchy_num_levels(hierarchy);
 
   // The following stuff is taken largely from the add_amr_mrgtree.c example
   // provided by the Silo folks.
@@ -21,32 +24,32 @@ void write_silo_data_hierarchy(DBfile* file, data_hierarchy_t* hierarchy)
   DBSetCwr(tree, "levels");
 
   // Define each AMR refinement level in the tree.
-  int num_tiles = 0;
+  int num_patches = 0;
   {
     const char* level_maps_name = "mesh_level_maps";
     char* level_region_names[1];
     int* seg_types = polymec_malloc(sizeof(int) * num_levels);
     int* seg_ids = polymec_malloc(sizeof(int) * num_levels);
-    int* num_level_tiles = polymec_malloc(sizeof(int) * num_levels);
+    int* num_level_patches = polymec_malloc(sizeof(int) * num_levels);
     int pos = 0, i = 0;
-    tile_set_t* tiles;
-    grid_level_t* level;
-    while (data_hierarchy_next_coarsest(hierarchy, &pos, &tiles, &level))
+    amr_patch_set_t* patches;
+    amr_grid_level_t* level;
+    while (amr_data_hierarchy_next_coarsest(hierarchy, &pos, &patches, &level))
     {
       seg_ids[i] = i;
       seg_types[i] = DB_BLOCKCENT;
-      num_level_tiles[i] = tile_set_size(tiles);
-      num_tiles += num_level_tiles[i];
+      num_level_patches[i] = amr_patch_set_size(patches);
+      num_patches += num_level_patches[i];
       ++i;
     }
     level_region_names[0] = "@level%d@n";
     DBAddRegionArray(tree, num_levels, level_region_names, 0, level_maps_name, 
-                     1, seg_ids, num_level_tiles, seg_types, NULL);
+                     1, seg_ids, num_level_patches, seg_types, NULL);
   }
   DBSetCwr(tree, "..");
 
-  // Now define the tiles.
-  DBAddRegion(tree, "patches", 0, num_tiles, NULL, 0, NULL, NULL, NULL, NULL); 
+  // Now define the patches.
+  DBAddRegion(tree, "patches", 0, num_patches, NULL, 0, NULL, NULL, NULL, NULL); 
   DBSetCwr(tree, "patches");
 
   // FIXME: Fancy things go here.
