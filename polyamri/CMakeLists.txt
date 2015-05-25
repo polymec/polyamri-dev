@@ -3,9 +3,9 @@ add_custom_target(update_polyamri_c ALL
                   cmake -E touch polyamri.c)
 
 # Library.
-add_library(polyamri polyamri.c)# tile.c tile_set.c grid_level.c 
-#            grid_interpolator.c grid_hierarchy.c data_hierarchy.c 
-#            linear_grid_interpolator.c write_silo_data_hierarchy.c
+add_library(polyamri polyamri.c amr_patch.c amr_patch_set.c amr_grid_level.c 
+            amr_grid_interpolator.c amr_grid_hierarchy.c amr_data_hierarchy.c 
+            linear_amr_grid_interpolator.c)# amr_silo_file.c)
 #            interpreter_register_amr_functions.c)
 add_dependencies(polyamri update_polyamri_c)
 
