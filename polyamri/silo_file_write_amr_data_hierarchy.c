@@ -5,7 +5,38 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "polyamri/write_silo_data_hierarchy.h"
+#include "polyamri/silo_file_write_amr_data_hierarchy.h"
+#include "silo.h"
+#include "pmpio.h"
+
+// These functions are implemented in polymec/core/silo_file.c, and used 
+// here, even though they are not part of polymec's API.
+
+// Here's the silo_file_t struct, replicated here from the source in 
+// polymec/core/silo_file.c. Note that whenever that source is changed, 
+// we must update it here as well. This logic is tightly coupled to that 
+// in polymec, anyway, so this is a calculated cost.
+struct silo_file_t 
+{
+  // File data.
+  DBfile* dbfile;
+
+  // Metadata.
+  char prefix[FILENAME_MAX], directory[FILENAME_MAX], filename[FILENAME_MAX];
+  int cycle;
+  real_t time;
+  int mode; // Open for reading (DB_READ) or writing (DB_CLOBBER)? 
+  string_ptr_unordered_map_t* expressions;
+
+#if POLYMEC_HAVE_MPI
+  // Stuff for poor man's parallel I/O.
+  PMPIO_baton_t* baton;
+  MPI_Comm comm;
+  int num_files, mpi_tag, nproc, rank, group_rank, rank_in_group;
+  ptr_array_t* multimeshes;
+  ptr_array_t* multivars;
+#endif
+};
 
 void silo_file_write_amr_data_hierarchy(silo_file_t* file, 
                                         const char* hierarchy_name,
@@ -33,7 +64,7 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
     int* num_level_patches = polymec_malloc(sizeof(int) * num_levels);
     int pos = 0, i = 0;
     amr_patch_set_t* patches;
-    amr_grid_level_t* level;
+    amr_grid_t* level;
     while (amr_data_hierarchy_next_coarsest(hierarchy, &pos, &patches, &level))
     {
       seg_ids[i] = i;
@@ -43,8 +74,8 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
       ++i;
     }
     level_region_names[0] = "@level%d@n";
-    DBAddRegionArray(tree, num_levels, level_region_names, 0, level_maps_name, 
-                     1, seg_ids, num_level_patches, seg_types, NULL);
+    DBAddRegionArray(tree, num_levels, (const char* const*)level_region_names, 
+                     0, level_maps_name, 1, seg_ids, num_level_patches, seg_types, NULL);
   }
   DBSetCwr(tree, "..");
 
@@ -69,7 +100,7 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
   DBAddOption(options, DBOPT_MRGV_ONAMES, mrgv_onames);
 
   // Deposit the MRG tree into the Silo file.
-  DBPutMrgtree(file, "mrgTree", "amr_mesh", tree, options);
+  DBPutMrgtree(file->dbfile, "mrgTree", "amr_mesh", tree, options);
   DBFreeMrgtree(tree);
 }
 
