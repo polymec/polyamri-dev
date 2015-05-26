@@ -5,6 +5,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include "core/array.h"
 #include "core/unordered_map.h"
 #include "polyamri/amr_grid.h"
 #include "polyamri/amr_grid_interpolator.h"
@@ -21,6 +22,14 @@ typedef enum
   REMOTE_FINER_LEVEL,
   REMOTE_COARSER_LEVEL
 } patch_type_t;
+
+// This stores a function and its arguments for filling ghost cells.
+typedef struct
+{
+  int (*method)(amr_grid_t*, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
+  int i_dest, j_dest, k_dest;
+  int i_src, j_src, k_src;
+} amr_grid_ghost_filler_t;
 
 struct amr_grid_t
 {
@@ -41,6 +50,12 @@ struct amr_grid_t
 
   // Associated data.
   int_ptr_unordered_map_t* data;
+
+  // Ghost filling machinery.
+  ptr_array_t* ghost_fillers;
+
+  // Finalized?
+  bool finalized;
 };
 
 amr_grid_t* amr_grid_new(bbox_t* domain, 
@@ -89,6 +104,8 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   grid->coarser = grid->finer = NULL;
 
   grid->data = int_ptr_unordered_map_new();
+  grid->ghost_fillers = ptr_array_new();
+  grid->finalized = false;
 
   return grid;
 }
@@ -104,6 +121,7 @@ void amr_grid_free(amr_grid_t* grid)
   polymec_free(grid->interpolators);
   polymec_free(grid->remote_owners);
   polymec_free(grid->data);
+  ptr_array_free(grid->ghost_fillers);
   polymec_free(grid);
 }
 
@@ -154,19 +172,6 @@ void amr_grid_associate_coarser(amr_grid_t* grid, amr_grid_t* coarser_grid, int 
   grid->coarser = coarser_grid;
 }
 
-bbox_t* amr_grid_domain(amr_grid_t* grid)
-{
-  return &grid->domain;
-}
-
-void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity)
-{
-  ASSERT(periodicity != NULL);
-  periodicity[0] = grid->x_periodic;
-  periodicity[1] = grid->y_periodic;
-  periodicity[2] = grid->z_periodic;
-}
-
 void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k)
 {
   int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
@@ -184,6 +189,73 @@ void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote
   grid->patch_types[patch_index] = REMOTE_SAME_LEVEL;
   grid->remote_owners[patch_index] = remote_owner;
   ++(grid->num_patches);
+}
+
+void amr_grid_finalize(amr_grid_t* grid)
+{
+  if (grid->finalized)
+    polymec_error("amr_grid_finalize: called finalize on previously finalized AMR grid!");
+  ASSERT(ptr_array_empty(grid->ghost_fillers));
+
+#if 0
+  // Assemble our ghost fillers.
+  for (int i = 0; i < grid->nx; ++i)
+  {
+    for (int j = 0; j < grid->ny; ++j)
+    {
+      for (int k = 0; k < grid->nz; ++k)
+      {
+        patch_type_t patch_type = get_patch_type(grid, i, j, k);
+        amr_grid_ghost_filler_t* ghost_filler = polymec_malloc(sizeof(amr_grid_ghost_filler_t));
+        switch(patch_type)
+        {
+          case LOCAL_SAME_LEVEL:
+            local_ghost_copy(grid, dest, i_dest, j_dest, k_dest, 
+                src, i_src, j_src, k_src);
+            break;
+          case LOCAL_FINER_LEVEL:
+            local_fine_to_coarse_interpolation(grid, dest, i_dest, j_dest, k_dest, 
+                src, i_src, j_src, k_src);
+            break;
+          case LOCAL_COARSER_LEVEL:
+            local_coarse_to_fine_interpolation(grid, dest, i_dest, j_dest, k_dest, 
+                src, i_src, j_src, k_src);
+            break;
+          case REMOTE_SAME_LEVEL:
+            token = start_remote_ghost_copy(grid, dest, i_dest, j_dest, k_dest, 
+                src, i_src, j_src, k_src);
+            break;
+          case REMOTE_FINER_LEVEL:
+            token = start_remote_fine_to_coarse_interpolation(grid, dest, i_dest, j_dest, k_dest, 
+                src, i_src, j_src, k_src);
+            break;
+          case REMOTE_COARSER_LEVEL:
+            token = start_remote_coarse_to_fine_interpolation(grid, dest, i_dest, j_dest, k_dest, 
+                src, i_src, j_src, k_src);
+          default:
+            break;
+        }
+        ghost_filler->i_dest = i_dest;
+        ptr_array_append_with_dtor(grid->ghost_fillers, ghost_filler, polymec_free);
+      }
+    }
+  }
+#endif
+
+  grid->finalized = true;
+}
+
+bbox_t* amr_grid_domain(amr_grid_t* grid)
+{
+  return &grid->domain;
+}
+
+void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity)
+{
+  ASSERT(periodicity != NULL);
+  periodicity[0] = grid->x_periodic;
+  periodicity[1] = grid->y_periodic;
+  periodicity[2] = grid->z_periodic;
 }
 
 int amr_grid_num_patches(amr_grid_t* grid)
@@ -237,10 +309,13 @@ amr_patch_set_t* amr_grid_create_patches(amr_grid_t* grid, int num_components)
   return patches;
 }
 
-static void local_ghost_copy(amr_grid_t* grid, 
-                             amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
-                             amr_patch_t* src,  int i_src, int j_src, int k_src)
+static int local_copy_west_to_east(amr_grid_t* grid, 
+                                   amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                   amr_patch_t* src,  int i_src, int j_src, int k_src)
 {
+  ASSERT((i_src == i_dest - 1) || ((i_dest == 0) && (i_src == grid->nx-1)));
+  ASSERT(j_src == j_dest);
+  ASSERT(k_src == k_dest);
   ASSERT(dest->nc == src->nc);
   ASSERT(dest->i1 == src->i1);
   ASSERT(dest->i2 == src->i2);
@@ -257,54 +332,261 @@ static void local_ghost_copy(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  if ((i_src == i_dest - 1) || ((i_dest == 0) && (i_src == grid->nx-1)))
-  {
+  for (int jj = j1; jj < j2; ++jj)
+    for (int kk = k1; kk < k2; ++kk)
+      for (int g = 0; g < ng; ++g)
+        for (int c = 0; c < nc; ++c)
+          d[i1-g-1][jj][kk][c] = s[i2-g-1][jj][kk][c];
+  return 0;
+}
+
+static int local_copy_east_to_west(amr_grid_t* grid, 
+                                   amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                   amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT((i_src == i_dest + 1) || ((i_dest == grid->nx-1) && (i_src == 0)));
+  ASSERT(j_src == j_dest);
+  ASSERT(k_src == k_dest);
+  ASSERT(dest->nc == src->nc);
+  ASSERT(dest->i1 == src->i1);
+  ASSERT(dest->i2 == src->i2);
+  ASSERT(dest->j1 == src->j1);
+  ASSERT(dest->j2 == src->j2);
+  ASSERT(dest->k1 == src->k1);
+  ASSERT(dest->k2 == src->k2);
+
+  // Get multi-arrays for the source and destination patches.
+  DECLARE_AMR_PATCH_ARRAY(s, src);
+  DECLARE_AMR_PATCH_ARRAY(d, dest);
+
+  int nc = src->nc, ng = grid->ng;
+  int i1 = src->i1, i2 = src->i2, 
+      j1 = src->j1, j2 = src->j2,
+      k1 = src->k1, k2 = src->k2;
+  for (int jj = j1; jj < j2; ++jj)
+    for (int kk = k1; kk < k2; ++kk)
+      for (int g = 0; g < ng; ++g)
+        for (int c = 0; c < nc; ++c)
+          d[i2+g][jj][kk][c] = s[i1+ng-g-1][jj][kk][c];
+  return 0;
+}
+
+static int local_copy_south_to_north(amr_grid_t* grid, 
+                                     amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                     amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT(i_src == i_dest);
+  ASSERT((j_src == j_dest - 1) || ((j_dest == 0) && (j_src == grid->ny-1)));
+  ASSERT(k_src == k_dest);
+  ASSERT(dest->nc == src->nc);
+  ASSERT(dest->i1 == src->i1);
+  ASSERT(dest->i2 == src->i2);
+  ASSERT(dest->j1 == src->j1);
+  ASSERT(dest->j2 == src->j2);
+  ASSERT(dest->k1 == src->k1);
+  ASSERT(dest->k2 == src->k2);
+
+  // Get multi-arrays for the source and destination patches.
+  DECLARE_AMR_PATCH_ARRAY(s, src);
+  DECLARE_AMR_PATCH_ARRAY(d, dest);
+
+  int nc = src->nc, ng = grid->ng;
+  int i1 = src->i1, i2 = src->i2, 
+      j1 = src->j1, j2 = src->j2,
+      k1 = src->k1, k2 = src->k2;
+  for (int ii = i1; ii < i2; ++ii)
+    for (int kk = k1; kk < k2; ++kk)
+      for (int g = 0; g < ng; ++g)
+        for (int c = 0; c < nc; ++c)
+          d[ii][j1-g-1][kk][c] = s[ii][j2-g-1][kk][c];
+
+  return 0;
+}
+
+static int local_copy_north_to_south(amr_grid_t* grid, 
+                                     amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                     amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT(i_src == i_dest);
+  ASSERT((j_src == j_dest + 1) || ((j_dest == grid->ny-1) && (j_src == 0)));
+  ASSERT(k_src == k_dest);
+  ASSERT(dest->nc == src->nc);
+  ASSERT(dest->i1 == src->i1);
+  ASSERT(dest->i2 == src->i2);
+  ASSERT(dest->j1 == src->j1);
+  ASSERT(dest->j2 == src->j2);
+  ASSERT(dest->k1 == src->k1);
+  ASSERT(dest->k2 == src->k2);
+
+  // Get multi-arrays for the source and destination patches.
+  DECLARE_AMR_PATCH_ARRAY(s, src);
+  DECLARE_AMR_PATCH_ARRAY(d, dest);
+
+  int nc = src->nc, ng = grid->ng;
+  int i1 = src->i1, i2 = src->i2, 
+      j1 = src->j1, j2 = src->j2,
+      k1 = src->k1, k2 = src->k2;
+  for (int ii = i1; ii < i2; ++ii)
+    for (int kk = k1; kk < k2; ++kk)
+      for (int g = 0; g < ng; ++g)
+        for (int c = 0; c < nc; ++c)
+          d[ii][j2+g][kk][c] = s[ii][j1+ng-g-1][kk][c];
+
+  return 0;
+}
+
+static int local_copy_below_to_above(amr_grid_t* grid, 
+                                     amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                     amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT(i_src == i_dest);
+  ASSERT(j_src == j_dest);
+  ASSERT((k_src == k_dest - 1) || ((k_dest == 0) && (k_src == grid->nz-1)));
+  ASSERT(dest->nc == src->nc);
+  ASSERT(dest->i1 == src->i1);
+  ASSERT(dest->i2 == src->i2);
+  ASSERT(dest->j1 == src->j1);
+  ASSERT(dest->j2 == src->j2);
+  ASSERT(dest->k1 == src->k1);
+  ASSERT(dest->k2 == src->k2);
+
+  // Get multi-arrays for the source and destination patches.
+  DECLARE_AMR_PATCH_ARRAY(s, src);
+  DECLARE_AMR_PATCH_ARRAY(d, dest);
+
+  int nc = src->nc, ng = grid->ng;
+  int i1 = src->i1, i2 = src->i2, 
+      j1 = src->j1, j2 = src->j2,
+      k1 = src->k1, k2 = src->k2;
+  for (int ii = i1; ii < i2; ++ii)
     for (int jj = j1; jj < j2; ++jj)
-      for (int kk = k1; kk < k2; ++kk)
-        for (int g = 0; g < ng; ++g)
-          for (int c = 0; c < nc; ++c)
-            d[i1-g-1][jj][kk][c] = s[i2-g-1][jj][kk][c];
-  }
-  else if ((i_src == i_dest + 1) || ((i_dest == grid->nx-1) && (i_src == 0)))
-  {
+      for (int g = 0; g < ng; ++g)
+        for (int c = 0; c < nc; ++c)
+          d[ii][jj][k1-g-1][c] = s[ii][jj][k2-g-1][c];
+
+  return 0;
+}
+
+static int local_copy_above_to_below(amr_grid_t* grid, 
+                                     amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                     amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT(i_src == i_dest);
+  ASSERT(j_src == j_dest);
+  ASSERT((k_src == k_dest + 1) || ((k_dest == grid->nz-1) && (k_src == 0)));
+  ASSERT(dest->nc == src->nc);
+  ASSERT(dest->i1 == src->i1);
+  ASSERT(dest->i2 == src->i2);
+  ASSERT(dest->j1 == src->j1);
+  ASSERT(dest->j2 == src->j2);
+  ASSERT(dest->k1 == src->k1);
+  ASSERT(dest->k2 == src->k2);
+
+  // Get multi-arrays for the source and destination patches.
+  DECLARE_AMR_PATCH_ARRAY(s, src);
+  DECLARE_AMR_PATCH_ARRAY(d, dest);
+
+  int nc = src->nc, ng = grid->ng;
+  int i1 = src->i1, i2 = src->i2, 
+      j1 = src->j1, j2 = src->j2,
+      k1 = src->k1, k2 = src->k2;
+  for (int ii = i1; ii < i2; ++ii)
     for (int jj = j1; jj < j2; ++jj)
-      for (int kk = k1; kk < k2; ++kk)
-        for (int g = 0; g < ng; ++g)
-          for (int c = 0; c < nc; ++c)
-            d[i2+g][jj][kk][c] = s[i1+ng-g-1][jj][kk][c];
-  }
-  else if ((j_src == j_dest - 1) || ((j_dest == 0) && (j_src == grid->ny-1)))
+      for (int g = 0; g < ng; ++g)
+        for (int c = 0; c < nc; ++c)
+          d[ii][jj][k2+g][c] = s[ii][jj][k1+ng-g-1][c];
+
+  return 0;
+}
+
+static int local_fine_to_coarse_west_to_east(amr_grid_t* grid, 
+                                             amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                             amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT((i_src == i_dest - 1) || ((i_dest == 0) && (i_src == grid->nx-1)));
+  ASSERT(j_src == j_dest);
+  ASSERT(k_src == k_dest);
+  ASSERT(grid->finer != NULL);
+  ASSERT(grid->ref_ratio > 0);
+  ASSERT(dest->nc == src->nc);
+
+  int nc = dest->nc, ng = grid->ng;
+  int ref_ratio = grid->ref_ratio;
+
+  // Loop over all the fine patches that correspond to this coarser one, and 
+  // perform the interpolation.
+  for (int I = 0; I < ref_ratio; ++I)
   {
-    for (int ii = i1; ii < i2; ++ii)
-      for (int kk = k1; kk < k2; ++kk)
-        for (int g = 0; g < ng; ++g)
-          for (int c = 0; c < nc; ++c)
-            d[ii][j1-g-1][kk][c] = s[ii][j2-g-1][kk][c];
+    int i_fine = ref_ratio * i_src + I; 
+    for (int J = 0; J < ref_ratio; ++J)
+    {
+      int j_fine = ref_ratio * j_src + J;
+      for (int K = 0; K < ref_ratio; ++K)
+      {
+        int k_fine = ref_ratio * k_src;
+        amr_grid_interpolator_t* interp = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
+        if (interp == NULL) // no finer patch beneath us
+          continue;
+
+        // Now that we have the correct interpolator, figure out the 
+        // source and destination (rectangular) regions.
+        int i1, i2, j1, j2, k1, k2; // FIXME
+        int ii1 = 0, ii2 = ng;
+        int jj1 = J * grid->py/ref_ratio, jj2 = (J+1) * grid->py/ref_ratio - 1;
+        int kk1 = K * grid->pz/ref_ratio, kk2 = (K+1) * grid->pz/ref_ratio - 1;
+
+        // Interpolate.
+        amr_grid_interpolator_interpolate(interp, i1, i2, j1, j2, k1, k2,
+                                          ii1, ii2, jj1, jj2, kk1, kk2, dest);
+      }
+    }
   }
-  else if ((j_src == j_dest + 1) || ((j_dest == grid->ny-1) && (j_src == 0)))
+  return 0;
+}
+
+static int local_fine_to_coarse_east_to_west(amr_grid_t* grid, 
+                                             amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                             amr_patch_t* src,  int i_src, int j_src, int k_src)
+{
+  ASSERT((i_src == i_dest + 1) || ((i_dest == grid->nx-1) && (i_src == 0)));
+  ASSERT(j_src == j_dest);
+  ASSERT(k_src == k_dest);
+  ASSERT(grid->finer != NULL);
+  ASSERT(grid->ref_ratio > 0);
+  ASSERT(dest->nc == src->nc);
+
+  int nc = dest->nc, ng = grid->ng;
+  int ref_ratio = grid->ref_ratio;
+
+  // Loop over all the fine patches that correspond to this coarser one, and 
+  // perform the interpolation.
+  for (int I = 0; I < ref_ratio; ++I)
   {
-    for (int ii = i1; ii < i2; ++ii)
-      for (int kk = k1; kk < k2; ++kk)
-        for (int g = 0; g < ng; ++g)
-          for (int c = 0; c < nc; ++c)
-            d[ii][j2+g][kk][c] = s[ii][j1+ng-g-1][kk][c];
+    int i_fine = ref_ratio * i_src + I; 
+    for (int J = 0; J < ref_ratio; ++J)
+    {
+      int j_fine = ref_ratio * j_src + J;
+      for (int K = 0; K < ref_ratio; ++K)
+      {
+        int k_fine = ref_ratio * k_src;
+        amr_grid_interpolator_t* interp = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
+        if (interp == NULL) // no finer patch beneath us
+          continue;
+
+        // Now that we have the correct interpolator, figure out the 
+        // source and destination (rectangular) regions.
+        int i1, i2, j1, j2, k1, k2; // FIXME
+        int ii1 = dest->i2, ii2 = dest->i2 + ng;
+        int jj1 = J * grid->py/ref_ratio, jj2 = (J+1) * grid->py/ref_ratio - 1;
+        int kk1 = K * grid->pz/ref_ratio, kk2 = (K+1) * grid->pz/ref_ratio - 1;
+
+        // Interpolate.
+        amr_grid_interpolator_interpolate(interp, i1, i2, j1, j2, k1, k2,
+                                          ii1, ii2, jj1, jj2, kk1, kk2, dest);
+      }
+    }
   }
-  else if ((k_src == k_dest - 1) || ((k_dest == 0) && (k_src == grid->nz-1)))
-  {
-    for (int ii = i1; ii < i2; ++ii)
-      for (int jj = j1; jj < j2; ++jj)
-        for (int g = 0; g < ng; ++g)
-          for (int c = 0; c < nc; ++c)
-            d[ii][jj][k1-g-1][c] = s[ii][jj][k2-g-1][c];
-  }
-  else
-  {
-    for (int ii = i1; ii < i2; ++ii)
-      for (int jj = j1; jj < j2; ++jj)
-        for (int g = 0; g < ng; ++g)
-          for (int c = 0; c < nc; ++c)
-            d[ii][jj][k2+g][c] = s[ii][jj][k1+ng-g-1][c];
-  }
+  return 0;
 }
 
 static void local_fine_to_coarse_interpolation(amr_grid_t* grid, 
@@ -421,63 +703,15 @@ static void finish_remote_coarse_to_fine_interpolation(amr_grid_t* grid, int tok
 {
 }
 
-static int start_filling_ghosts(amr_grid_t* grid, 
-                                amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
-                                amr_patch_t* src,  int i_src, int j_src, int k_src)
-{
-  ASSERT(dest != NULL);
-  ASSERT(dest != src);
-  ASSERT(((i_dest == i_src-1) || (i_dest == i_src+1) || 
-          (j_dest == j_src-1) || (j_dest == j_src+1) || 
-          (k_dest == k_src-1) || (k_dest == k_src+1)) ||
-          (grid->x_periodic && (i_src == 0) && (i_dest == grid->nx-1)) ||
-          (grid->x_periodic && (i_src == grid->nx-1) && (i_dest == 0)) ||
-          (grid->y_periodic && (j_src == 0) && (j_dest == grid->ny-1)) ||
-          (grid->y_periodic && (j_src == grid->ny-1) && (j_dest == 0)) ||
-          (grid->z_periodic && (k_src == 0) && (k_dest == grid->nz-1)) ||
-          (grid->z_periodic && (k_src == grid->nz-1) && (k_dest == 0)));
-
-  int token = -1;
-  patch_type_t src_patch_type = get_patch_type(grid, i_src, j_src, k_src);
-  switch(src_patch_type)
-  {
-    case LOCAL_SAME_LEVEL:
-      ASSERT(src != NULL);
-      local_ghost_copy(grid, dest, i_dest, j_dest, k_dest, 
-                       src, i_src, j_src, k_src);
-      break;
-    case LOCAL_FINER_LEVEL:
-      local_fine_to_coarse_interpolation(grid, dest, i_dest, j_dest, k_dest, 
-                                         src, i_src, j_src, k_src);
-      break;
-    case LOCAL_COARSER_LEVEL:
-      local_coarse_to_fine_interpolation(grid, dest, i_dest, j_dest, k_dest, 
-                                         src, i_src, j_src, k_src);
-      break;
-    case REMOTE_SAME_LEVEL:
-      token = start_remote_ghost_copy(grid, dest, i_dest, j_dest, k_dest, 
-                                      src, i_src, j_src, k_src);
-      break;
-    case REMOTE_FINER_LEVEL:
-      token = start_remote_fine_to_coarse_interpolation(grid, dest, i_dest, j_dest, k_dest, 
-                                                        src, i_src, j_src, k_src);
-      break;
-    case REMOTE_COARSER_LEVEL:
-      token = start_remote_coarse_to_fine_interpolation(grid, dest, i_dest, j_dest, k_dest, 
-                                                        src, i_src, j_src, k_src);
-    default:
-      break;
-  }
-
-  // FIXME: Stash the token somewhere we can get to this transaction.
-
-  return token;
-}
-
 void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
 {
-  if (grid->ng == 0)
-    return;
+#if 0
+  // Simply go through the instructions we set up before.
+  for (int i = 0; i < grid->ghost_fillers->size; ++i)
+  {
+    amr_grid_ghost_filler_t* filler = grid->ghost_fillers->data[i];
+    filler->method(grid, dest
+  }
 
   // If we made this patch set, we know how it's indexed. Get pointers 
   // to each of the local patches within.
@@ -575,6 +809,7 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
       }
     }
   }
+#endif
 }
 
 void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)

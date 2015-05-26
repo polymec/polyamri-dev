@@ -30,6 +30,15 @@ typedef enum
   AMR_GRID_Z2 = 5
 } amr_grid_neighbor_slot_t;
 
+//------------------------------------------------------------------------
+//                          Construction methods
+//------------------------------------------------------------------------
+// The following methods are used to construct AMR grids and associate them 
+// with their neighbors and with their coarser/finer counterparts.
+// amr_grid_finalize() must be called after an AMR grid has been properly
+// constructed.
+//------------------------------------------------------------------------
+
 // Creates a new empty grid level defined on the region filling the given 
 // bounding box, with nx x ny x nz patches of size px x py x pz. Each patch has 
 // the given number of ghost cells.
@@ -61,11 +70,6 @@ void amr_grid_set_data(amr_grid_t* grid,
                        void* data,
                        void (*data_dtor)(void* data));
 
-// Retrieves a piece of data from this grid given its index, or returns 
-// NULL if no data is associated using that index.
-void* amr_grid_data(amr_grid_t* grid,
-                    int data_index);
-
 // Associates a finer grid with this one, with the given refinement ratio 
 // (which must be a power of 2).
 void amr_grid_associate_finer(amr_grid_t* grid, amr_grid_t* finer_grid, int ref_ratio);
@@ -73,13 +77,6 @@ void amr_grid_associate_finer(amr_grid_t* grid, amr_grid_t* finer_grid, int ref_
 // Associates a coarser grid with this one, with the given refinement ratio 
 // (which must be a power of 2).
 void amr_grid_associate_coarser(amr_grid_t* grid, amr_grid_t* coarser_grid, int ref_ratio);
-
-// Returns the bounding box describing the region represented by this grid.
-bbox_t* amr_grid_domain(amr_grid_t* grid);
-
-// Queries the periodicity of the grid, placing booleans for the 
-// x, y, and z periodicity into the given periodicity array.
-void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity);
 
 // Inserts a new local patch at (i, j, k) in the nx x ny x nz array of patches.
 // No patch may exist (locally, remotely, or at another grid) at (i, j, k).
@@ -90,8 +87,32 @@ void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k);
 // The MPI rank of the remote process is given by remote_owner.
 void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote_owner);
 
+// Finalizes the construction process for an AMR grid. This must be called 
+// before any of the grid's usage methods (below) are invoked. Should only 
+// be called once.
+void amr_grid_finalize(amr_grid_t* grid);
+
+//------------------------------------------------------------------------
+//                          Usage methods
+//------------------------------------------------------------------------
+// The following methods can only be used after an AMR grid has been 
+// fully constructed and finalized.
+//------------------------------------------------------------------------
+
 // Returns the number of patches in this grid.
 int amr_grid_num_patches(amr_grid_t* grid);
+
+// Returns the bounding box describing the region represented by this grid.
+bbox_t* amr_grid_domain(amr_grid_t* grid);
+
+// Queries the periodicity of the grid, placing booleans for the 
+// x, y, and z periodicity into the given periodicity array.
+void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity);
+
+// Retrieves a piece of data from this grid given its index, or returns 
+// NULL if no data is associated using that index.
+void* amr_grid_data(amr_grid_t* grid,
+                    int data_index);
 
 // Creates a new set of AMR patches associated with the given grid. This 
 // patch set must be deallocated with amr_patch_set_free.
