@@ -27,6 +27,7 @@ struct amr_grid_t
   bbox_t domain;
   int nx, ny, nz, px, py, pz, ng, num_patches;
   patch_type_t* patch_types;
+  int* remote_owners;
   amr_grid_interpolator_t** interpolators;
   bool x_periodic, y_periodic, z_periodic;
 
@@ -75,10 +76,12 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   grid->y_periodic = periodic_in_y;
   grid->z_periodic = periodic_in_z;
   grid->patch_types = polymec_malloc(sizeof(patch_type_t) * nx * ny * nz);
+  grid->remote_owners = polymec_malloc(sizeof(int) * nx * ny * nz);
   grid->interpolators = polymec_malloc(sizeof(amr_grid_interpolator_t*) * nx * ny * nz);
   for (int i = 0; i < nx * ny * nz; ++i)
   {
     grid->patch_types[i] = NONE;
+    grid->remote_owners[i] = -1;
     grid->interpolators[i] = NULL;
   }
 
@@ -99,6 +102,7 @@ void amr_grid_free(amr_grid_t* grid)
   }
   polymec_free(grid->patch_types);
   polymec_free(grid->interpolators);
+  polymec_free(grid->remote_owners);
   polymec_free(grid->data);
   polymec_free(grid);
 }
@@ -163,11 +167,22 @@ void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity)
   periodicity[2] = grid->z_periodic;
 }
 
-void amr_grid_add_patch(amr_grid_t* grid, int i, int j, int k)
+void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k)
 {
-  patch_type_t patch_type = grid->patch_types[grid->nz*grid->ny*i + grid->nz*j + k];
+  int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
+  patch_type_t patch_type = grid->patch_types[patch_index];
   ASSERT(patch_type == NONE);
-  grid->patch_types[grid->nz*grid->ny*i + grid->nz*j + k] = LOCAL_SAME_LEVEL;
+  grid->patch_types[patch_index] = LOCAL_SAME_LEVEL;
+  ++(grid->num_patches);
+}
+
+void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote_owner)
+{
+  int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
+  patch_type_t patch_type = grid->patch_types[patch_index];
+  ASSERT(patch_type == NONE);
+  grid->patch_types[patch_index] = REMOTE_SAME_LEVEL;
+  grid->remote_owners[patch_index] = remote_owner;
   ++(grid->num_patches);
 }
 
@@ -191,7 +206,7 @@ static inline bool local_patch_is_present(amr_grid_t* grid, int i, int j, int k)
   return (get_patch_type(grid, i, j, k) == LOCAL_SAME_LEVEL);
 }
 
-amr_patch_set_t* amr_grid_patch_set(amr_grid_t* grid, int num_components)
+amr_patch_set_t* amr_grid_create_patches(amr_grid_t* grid, int num_components)
 {
   ASSERT(num_components > 0);
 

@@ -28,7 +28,7 @@ amr_data_hierarchy_t* amr_data_hierarchy_new(amr_grid_hierarchy_t* grids,
   amr_grid_t* level;
   while (amr_grid_hierarchy_next_coarsest(grids, &pos, &level))
   {
-    amr_patch_set_t* patches = amr_grid_patch_set(level, data->num_components);
+    amr_patch_set_t* patches = amr_grid_create_patches(level, data->num_components);
     ptr_array_append_with_dtor(data->patch_sets, patches, DTOR(amr_patch_set_free));
   }
   return data;

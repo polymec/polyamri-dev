@@ -81,15 +81,21 @@ bbox_t* amr_grid_domain(amr_grid_t* grid);
 // x, y, and z periodicity into the given periodicity array.
 void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity);
 
-// Inserts a new patch location at (i, j, k) in the nx x ny x nz array of patches.
+// Inserts a new local patch at (i, j, k) in the nx x ny x nz array of patches.
 // No patch may exist (locally, remotely, or at another grid) at (i, j, k).
-void amr_grid_add_patch(amr_grid_t* grid, int i, int j, int k);
+void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k);
+
+// Inserts a new remote patch at (i, j, k) in the nx x ny x nz array of patches.
+// No patch may exist (locally, remotely, or at another grid) at (i, j, k).
+// The MPI rank of the remote process is given by remote_owner.
+void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote_owner);
 
 // Returns the number of patches in this grid.
 int amr_grid_num_patches(amr_grid_t* grid);
 
-// Creates a new patch set associated with the given grid.
-amr_patch_set_t* amr_grid_patch_set(amr_grid_t* grid, int num_components);
+// Creates a new set of AMR patches associated with the given grid. This 
+// patch set must be deallocated with amr_patch_set_free.
+amr_patch_set_t* amr_grid_create_patches(amr_grid_t* grid, int num_components);
 
 // Fills all ghost cells in the patches within the given patch set, 
 // communicating with other grids as needed.
