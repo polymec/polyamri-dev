@@ -10,33 +10,33 @@
 #include <setjmp.h>
 #include <string.h>
 #include "cmockery.h"
-#include "polyamri/amr_grid_level.h"
+#include "polyamri/amr_grid.h"
 
 void test_ctor(void** state) 
 {
   bbox_t bbox = {.x1 = 0.0, .x2 = 1.0, .y1 = 0.0, .y2 = 1.0, .z1 = 0.0, .z2 = 1.0};
-  amr_grid_level_t* level = amr_grid_level_new(&bbox, 4, 4, 4, 16, 16, 16, 1, false, false, false);
-  assert_int_equal(0, amr_grid_level_num_patches(level));
-  amr_patch_set_t* patches = amr_grid_level_patch_set(level, 1);
+  amr_grid_t* level = amr_grid_new(&bbox, 4, 4, 4, 16, 16, 16, 1, false, false, false);
+  assert_int_equal(0, amr_grid_num_patches(level));
+  amr_patch_set_t* patches = amr_grid_patch_set(level, 1);
   assert_int_equal(0, amr_patch_set_size(patches));
-  amr_grid_level_fill_ghosts(level, patches); // Should do nothing.
+  amr_grid_fill_ghosts(level, patches); // Should do nothing.
   amr_patch_set_free(patches);
-  amr_grid_level_free(level);
+  amr_grid_free(level);
 }
 
 static void test_fill_ghosts(void** state)
 { 
   // Set up a 4 x 4 x 4 array of patches in a grid level and fill ghost values.
   bbox_t bbox = {.x1 = 0.0, .x2 = 1.0, .y1 = 0.0, .y2 = 1.0, .z1 = 0.0, .z2 = 1.0};
-  amr_grid_level_t* level = amr_grid_level_new(&bbox, 4, 4, 4, 16, 16, 16, 1, true, true, true);
+  amr_grid_t* level = amr_grid_new(&bbox, 4, 4, 4, 16, 16, 16, 1, true, true, true);
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)
-        amr_grid_level_add_patch(level, i, j, k);
-  assert_int_equal(4*4*4, amr_grid_level_num_patches(level));
+        amr_grid_add_patch(level, i, j, k);
+  assert_int_equal(4*4*4, amr_grid_num_patches(level));
 
   // Make a patch set on this grid level.
-  amr_patch_set_t* patches = amr_grid_level_patch_set(level, 1);
+  amr_patch_set_t* patches = amr_grid_patch_set(level, 1);
   assert_int_equal(4*4*4, amr_patch_set_size(patches));
 
   // Fill each patch with a unique identifier.
@@ -68,7 +68,7 @@ static void test_fill_ghosts(void** state)
   }
 
   // Fill ghosts.
-  amr_grid_level_fill_ghosts(level, patches); 
+  amr_grid_fill_ghosts(level, patches); 
 
   // Now check the ghost cell values.
   pos = 0;
@@ -104,7 +104,7 @@ static void test_fill_ghosts(void** state)
 
   // Clean up.
   amr_patch_set_free(patches);
-  amr_grid_level_free(level);
+  amr_grid_free(level);
 } 
 
 int main(int argc, char* argv[]) 

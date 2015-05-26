@@ -11,7 +11,7 @@
 struct amr_grid_hierarchy_t 
 {
   bbox_t domain;
-  int nx, ny, nz, tx, ty, tz;
+  int nx, ny, nz, px, py, pz;
   int num_ghosts, ref_ratio;
   bool x_periodic, y_periodic, z_periodic;
   ptr_array_t* levels;
@@ -19,7 +19,7 @@ struct amr_grid_hierarchy_t
 
 amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain, 
                                              int nx, int ny, int nz, 
-                                             int tx, int ty, int tz,
+                                             int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z)
 {
@@ -29,16 +29,16 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain,
   ASSERT(nx > 0);
   ASSERT(ny > 0);
   ASSERT(nz > 0);
-  ASSERT(tx > 0);
-  ASSERT(ty > 0);
-  ASSERT(tz > 0);
+  ASSERT(px > 0);
+  ASSERT(py > 0);
+  ASSERT(pz > 0);
   ASSERT(num_ghosts >= 0);
   ASSERT((ref_ratio % 2) == 0); // FIXME: Not good enough!
 
   amr_grid_hierarchy_t* hierarchy = malloc(sizeof(amr_grid_hierarchy_t));
   hierarchy->domain = *domain;
   hierarchy->nx = nx, hierarchy->ny = ny, hierarchy->nz = nz;
-  hierarchy->tx = tx, hierarchy->ty = ny, hierarchy->tz = tz;
+  hierarchy->px = px, hierarchy->py = py, hierarchy->pz = pz;
   hierarchy->num_ghosts = num_ghosts;
   hierarchy->ref_ratio = ref_ratio;
   hierarchy->x_periodic = periodic_in_x;
@@ -83,11 +83,11 @@ void amr_grid_hierarchy_get_periodicity(amr_grid_hierarchy_t* hierarchy, bool* p
 }
 
 
-amr_grid_level_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
+amr_grid_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
 {
   int num_levels = hierarchy->levels->size;
   int nx = hierarchy->nx, ny = hierarchy->ny, nz = hierarchy->nz;
-  int tx = hierarchy->tx, ty = hierarchy->ty, tz = hierarchy->tz;
+  int px = hierarchy->px, py = hierarchy->py, pz = hierarchy->pz;
   int ref_ratio = hierarchy->ref_ratio;
   for (int l = 0; l < num_levels; ++l)
   {
@@ -95,25 +95,25 @@ amr_grid_level_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
     ny *= ref_ratio;
     nz *= ref_ratio;
   }
-  amr_grid_level_t* new_level = amr_grid_level_new(&hierarchy->domain, nx, ny, nz,
-                                                   tx, ty, tz, hierarchy->num_ghosts,
-                                                   hierarchy->x_periodic, 
-                                                   hierarchy->y_periodic, 
-                                                   hierarchy->z_periodic);
-  ptr_array_append_with_dtor(hierarchy->levels, new_level, DTOR(amr_grid_level_free));
+  amr_grid_t* new_level = amr_grid_new(&hierarchy->domain, nx, ny, nz,
+                                       px, py, pz, hierarchy->num_ghosts,
+                                       hierarchy->x_periodic, 
+                                       hierarchy->y_periodic, 
+                                       hierarchy->z_periodic);
+  ptr_array_append_with_dtor(hierarchy->levels, new_level, DTOR(amr_grid_free));
 
   // Hook this grid level up to the next coarser one.
   if (num_levels > 0)
   {
-    amr_grid_level_t* coarser = hierarchy->levels->data[num_levels-1];
-    amr_grid_level_associate_finer_level(coarser, new_level, ref_ratio);
-    amr_grid_level_associate_coarser_level(new_level, coarser, ref_ratio);
+    amr_grid_t* coarser = hierarchy->levels->data[num_levels-1];
+    amr_grid_associate_finer(coarser, new_level, ref_ratio);
+    amr_grid_associate_coarser(new_level, coarser, ref_ratio);
   }
 
   return new_level;
 }
 
-bool amr_grid_hierarchy_next_coarsest(amr_grid_hierarchy_t* hierarchy, int* pos, amr_grid_level_t** level)
+bool amr_grid_hierarchy_next_coarsest(amr_grid_hierarchy_t* hierarchy, int* pos, amr_grid_t** level)
 {
   if (*pos >= hierarchy->levels->size)
     return false;
@@ -122,7 +122,7 @@ bool amr_grid_hierarchy_next_coarsest(amr_grid_hierarchy_t* hierarchy, int* pos,
   return true;
 }
 
-bool amr_grid_hierarchy_next_finest(amr_grid_hierarchy_t* hierarchy, int* pos, amr_grid_level_t** level)
+bool amr_grid_hierarchy_next_finest(amr_grid_hierarchy_t* hierarchy, int* pos, amr_grid_t** level)
 {
   if (*pos >= hierarchy->levels->size)
     return false;

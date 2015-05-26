@@ -25,16 +25,16 @@ void test_ctor(void** state)
   assert_false(periodicity[1]);
   assert_false(periodicity[2]);
 
-  amr_grid_level_t* level = amr_grid_hierarchy_add_level(h);
+  amr_grid_t* level = amr_grid_hierarchy_add_level(h);
   assert_int_equal(1, amr_grid_hierarchy_num_levels(h));
-  amr_grid_level_get_periodicity(level, periodicity);
+  amr_grid_get_periodicity(level, periodicity);
   assert_false(periodicity[0]);
   assert_false(periodicity[1]);
   assert_false(periodicity[2]);
 
   // Test basic coarse->fine traversal.
   int pos = 0;
-  amr_grid_level_t* l;
+  amr_grid_t* l;
   bool result = amr_grid_hierarchy_next_coarsest(h, &pos, &l);
   assert_true(result);
   assert_true(l == level);

@@ -37,12 +37,12 @@ int amr_data_hierarchy_num_levels(amr_data_hierarchy_t* data);
 // Traverses the data hierarchy from the coarsest level to the finest.
 // Allows access to the patch set and the grid level on each level.
 // Set *pos to 0 to reset the iteration.
-bool amr_data_hierarchy_next_coarsest(amr_data_hierarchy_t* data, int* pos, amr_patch_set_t** patch_set, amr_grid_level_t** level);
+bool amr_data_hierarchy_next_coarsest(amr_data_hierarchy_t* data, int* pos, amr_patch_set_t** patch_set, amr_grid_t** level);
 
 // Traverses the grid hierarchy from the finest level to the coarsest.
 // Allows access to the patch set and the grid level on each level.
 // Set *pos to 0 to reset the iteration.
-bool amr_data_hierarchy_next_finest(amr_data_hierarchy_t* data, int* pos, amr_patch_set_t** patch_set, amr_grid_level_t** level);
+bool amr_data_hierarchy_next_finest(amr_data_hierarchy_t* data, int* pos, amr_patch_set_t** patch_set, amr_grid_t** level);
 
 #endif
 
