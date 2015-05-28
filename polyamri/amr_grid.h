@@ -67,7 +67,7 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
 void amr_grid_set_property(amr_grid_t* grid,
                            const char* name,
                            void* property,
-                           void (*data_dtor)(void* data));
+                           void (*property_dtor)(void* property));
 
 // Associates a finer grid with this one, with the given refinement ratio 
 // (which must be a power of 2).
@@ -124,19 +124,26 @@ void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity);
 // NULL if no data is associated using that index.
 void* amr_grid_property(amr_grid_t* grid, const char* name);
 
-#if 0
-// Fills all ghost cells in the patches within the given patch set, 
+//------------------------------------------------------------------------
+//                          Service methods
+//------------------------------------------------------------------------
+// The following methods provide services to other classes. They can be 
+// used directly by folks who Really Understand What They're Doing.
+//------------------------------------------------------------------------
+
+typedef struct amr_grid_data_t amr_grid_data_t;
+
+// Fills all ghost cells in the patches within the given grid data, 
 // communicating with other grids as needed.
-void amr_grid_fill_ghosts(amr_grid_t* grid, amr_patch_set_t* patches);
+void amr_grid_fill_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
 
 // Begins an asynchronous ghost-cell-filling operation in the patches within 
-// the given patch set, communicating with other grids as needed. 
-void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches);
+// the given grid data, communicating with other grids as needed. 
+void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
 
 // Concludes an asynchronous ghost-cell-filling operation initiated by 
 // a call to amr_grid_start_filling_ghosts().
-void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches);
-#endif
+void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
 
 #endif
 

@@ -8,7 +8,7 @@
 #include "core/array.h"
 #include "core/unordered_map.h"
 #include "polyamri/amr_grid.h"
-#include "polyamri/amr_patch.h"
+#include "polyamri/amr_grid_data.h"
 #include "polyamri/amr_grid_interpolator.h"
 
 // This is a descriptor for "types" of patches -- this determines the nature 
@@ -24,13 +24,26 @@ typedef enum
   REMOTE_COARSER_LEVEL
 } patch_type_t;
 
-// This stores a function and its arguments for filling ghost cells.
+// This stores a function and its arguments for starting the process of 
+// filling ghost cells.
 typedef struct
 {
   int (*method)(amr_grid_t*, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
   int i_dest, j_dest, k_dest;
   int i_src, j_src, k_src;
-} amr_grid_ghost_filler_t;
+} amr_grid_ghost_filler_starter_t;
+
+// This stores a function and its arguments for finishing the process of 
+// filling ghost cells.
+typedef struct
+{
+  int (*method)(amr_grid_t*, int, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
+  int token;
+  amr_patch_t* dest_patch;
+  int i_dest, j_dest, k_dest;
+  amr_patch_t* src_patch;
+  int i_src, j_src, k_src;
+} amr_grid_ghost_filler_finisher_t;
 
 struct amr_grid_t
 {
@@ -49,11 +62,12 @@ struct amr_grid_t
   // Neighboring grids.
   amr_grid_t* neighbors[6];
 
-  // Associated data.
-  int_ptr_unordered_map_t* data;
+  // Associated properties.
+  string_ptr_unordered_map_t* properties;
 
-  // Ghost filling machinery.
-  ptr_array_t* ghost_fillers;
+  // Ghost filling machinery -- asynchronous!
+  ptr_array_t* ghost_filler_starters;
+  ptr_array_t* ghost_filler_finishers;
 
   // Finalized?
   bool finalized;
@@ -104,8 +118,9 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   grid->ref_ratio = 0;
   grid->coarser = grid->finer = NULL;
 
-  grid->data = int_ptr_unordered_map_new();
-  grid->ghost_fillers = ptr_array_new();
+  grid->properties = string_ptr_unordered_map_new();
+  grid->ghost_filler_starters = ptr_array_new();
+  grid->ghost_filler_finishers = ptr_array_new();
   grid->finalized = false;
 
   return grid;
@@ -121,8 +136,9 @@ void amr_grid_free(amr_grid_t* grid)
   polymec_free(grid->patch_types);
   polymec_free(grid->interpolators);
   polymec_free(grid->remote_owners);
-  polymec_free(grid->data);
-  ptr_array_free(grid->ghost_fillers);
+  string_ptr_unordered_map_free(grid->properties);
+  ptr_array_free(grid->ghost_filler_starters);
+  ptr_array_free(grid->ghost_filler_finishers);
   polymec_free(grid);
 }
 
@@ -139,18 +155,18 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
   grid->neighbors[neighbor_slot] = neighbor;
 }
 
-void amr_grid_set_data(amr_grid_t* grid,
-                       int data_index,
-                       void* data,
-                       void (*data_dtor)(void* data))
+void amr_grid_set_property(amr_grid_t* grid,
+                           const char* name,
+                           void* property,
+                           void (*property_dtor)(void* property))
 {
-  int_ptr_unordered_map_insert_with_v_dtor(grid->data, data_index, data, data_dtor);
+  string_ptr_unordered_map_insert_with_kv_dtors(grid->properties, string_dup(name), property, string_free, property_dtor);
 }
 
-void* amr_grid_data(amr_grid_t* grid,
-                    int data_index)
+void* amr_grid_property(amr_grid_t* grid,
+                        const char* name)
 {
-  void** ptr = int_ptr_unordered_map_get(grid->data, data_index);
+  void** ptr = string_ptr_unordered_map_get(grid->properties, (char*)name);
   if (ptr != NULL)
     return *ptr;
   else
@@ -202,7 +218,8 @@ void amr_grid_finalize(amr_grid_t* grid)
 {
   if (grid->finalized)
     polymec_error("amr_grid_finalize: called finalize on previously finalized AMR grid!");
-  ASSERT(ptr_array_empty(grid->ghost_fillers));
+  ASSERT(ptr_array_empty(grid->ghost_filler_starters));
+  ASSERT(ptr_array_empty(grid->ghost_filler_finishers));
 
 #if 0
   // Assemble our ghost fillers.
@@ -694,16 +711,41 @@ static void finish_remote_coarse_to_fine_interpolation(amr_grid_t* grid, int tok
 {
 }
 
-#if 0
-void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
+void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
 {
-  // Simply go through the instructions we set up before.
-  for (int i = 0; i < grid->ghost_fillers->size; ++i)
-  {
-    amr_grid_ghost_filler_t* filler = grid->ghost_fillers->data[i];
-    filler->method(grid, dest
-  }
+  ASSERT(amr_grid_data_grid(data) == grid);
+  ASSERT(grid->ghost_filler_finishers->size == 0);
 
+  // Go through our list of starters and tick them off.
+  for (int i = 0; i < grid->ghost_filler_starters->size; ++i)
+  {
+    // Start the process of filling the ghost cells.
+    amr_grid_ghost_filler_starter_t* starter = grid->ghost_filler_starters->data[i];
+    amr_patch_t* dest_patch = amr_grid_data_patch(data, starter->i_dest, starter->j_dest, starter->k_dest, NULL);
+    ASSERT(dest_patch != NULL);
+    amr_patch_t* src_patch = amr_grid_data_patch(data, starter->i_src, starter->j_src, starter->k_src, NULL);
+    int token = starter->method(grid, 
+                                dest_patch, 
+                                starter->i_dest, starter->j_dest, starter->k_dest,
+                                src_patch, 
+                                starter->i_src, starter->j_src, starter->k_src);
+    if (token != -1)
+    {
+      // If this process has an asynchronous part, create a finisher for it.
+      amr_grid_ghost_filler_finisher_t* finisher = polymec_malloc(sizeof(amr_grid_ghost_filler_finisher_t));
+      finisher->token = token;
+      finisher->dest_patch = dest_patch;
+      finisher->i_dest = starter->i_dest;
+      finisher->j_dest = starter->j_dest;
+      finisher->k_dest = starter->k_dest;
+      finisher->src_patch = src_patch;
+      finisher->i_src = starter->i_src;
+      finisher->j_src = starter->j_src;
+      finisher->k_src = starter->k_src;
+      ptr_array_append_with_dtor(grid->ghost_filler_finishers, finisher, polymec_free);
+    }
+  }
+#if 0
   // If we made this patch set, we know how it's indexed. Get pointers 
   // to each of the local patches within.
   int pos = 0;
@@ -800,30 +842,28 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
       }
     }
   }
+#endif
 }
 
-void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
+void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
 {
-#if 0
-  switch(src_patch_type)
+  // Go through our existing list of "finishers."
+  for (int i = 0; i < grid->ghost_filler_finishers->size; ++i)
   {
-    case REMOTE_SAME_LEVEL:
-      finish_remote_ghost_copy(grid, token);
-      break;
-    case REMOTE_FINER_LEVEL:
-      finish_remote_fine_to_coarse_interpolation(grid, token);
-      break;
-    case REMOTE_COARSER_LEVEL:
-      finish_remote_coarse_to_fine_interpolation(grid, token);
-    default:
-      break;
+    amr_grid_ghost_filler_finisher_t* finisher = grid->ghost_filler_finishers->data[i];
+    finisher->method(grid, finisher->token, 
+                     finisher->dest_patch, 
+                     finisher->i_dest, finisher->j_dest, finisher->k_dest,
+                     finisher->src_patch, 
+                     finisher->i_src, finisher->j_src, finisher->k_src);
   }
-#endif
+
+  // Clear the list.
+  ptr_array_clear(grid->ghost_filler_finishers);
 }
 
-void amr_grid_fill_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
+void amr_grid_fill_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
 {
-  amr_grid_start_filling_ghosts(grid, patches);
-  amr_grid_finish_filling_ghosts(grid, patches);
+  amr_grid_start_filling_ghosts(grid, data);
+  amr_grid_finish_filling_ghosts(grid, data);
 }
-#endif
