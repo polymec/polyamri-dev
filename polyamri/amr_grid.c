@@ -15,7 +15,7 @@
 // of interacting patches during ghost cell filling.
 typedef enum
 {
-  NONE,
+  NO_PATCH,
   LOCAL_SAME_LEVEL,
   LOCAL_FINER_LEVEL,
   LOCAL_COARSER_LEVEL,
@@ -110,7 +110,7 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   grid->interpolators = polymec_malloc(sizeof(amr_grid_interpolator_t*) * nx * ny * nz);
   for (int i = 0; i < nx * ny * nz; ++i)
   {
-    grid->patch_types[i] = NONE;
+    grid->patch_types[i] = NO_PATCH;
     grid->remote_owners[i] = -1;
     grid->interpolators[i] = NULL;
   }
@@ -199,7 +199,7 @@ void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k)
 {
   int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
   patch_type_t patch_type = grid->patch_types[patch_index];
-  ASSERT(patch_type == NONE);
+  ASSERT(patch_type == NO_PATCH);
   grid->patch_types[patch_index] = LOCAL_SAME_LEVEL;
   ++(grid->num_patches);
 }
@@ -208,7 +208,7 @@ void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote
 {
   int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
   patch_type_t patch_type = grid->patch_types[patch_index];
-  ASSERT(patch_type == NONE);
+  ASSERT(patch_type == NO_PATCH);
   grid->patch_types[patch_index] = REMOTE_SAME_LEVEL;
   grid->remote_owners[patch_index] = remote_owner;
   ++(grid->num_patches);
@@ -216,10 +216,24 @@ void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote
 
 void amr_grid_finalize(amr_grid_t* grid)
 {
-  if (grid->finalized)
-    polymec_error("amr_grid_finalize: called finalize on previously finalized AMR grid!");
+  ASSERT(!grid->finalized);
   ASSERT(ptr_array_empty(grid->ghost_filler_starters));
   ASSERT(ptr_array_empty(grid->ghost_filler_finishers));
+
+  // Make sure that we have accounted for all patches in our construction 
+  // process.
+  for (int i = 0; i < grid->nx; ++i)
+  {
+    for (int j = 0; j < grid->ny; ++j)
+    {
+      for (int k = 0; k < grid->nz; ++k)
+      {
+        int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
+        if (grid->patch_types[patch_index] == NO_PATCH)
+          polymec_error("amr_grid_finalize: no local or remote patch at (%d, %d, %d).", i, j, k);
+      }
+    }
+  }
 
 #if 0
   // Assemble our ghost fillers.
@@ -714,7 +728,7 @@ static void finish_remote_coarse_to_fine_interpolation(amr_grid_t* grid, int tok
 void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
 {
   ASSERT(amr_grid_data_grid(data) == grid);
-  ASSERT(grid->ghost_filler_finishers->size == 0);
+  ASSERT(ptr_array_empty(grid->ghost_filler_finishers));
 
   // Go through our list of starters and tick them off.
   for (int i = 0; i < grid->ghost_filler_starters->size; ++i)
