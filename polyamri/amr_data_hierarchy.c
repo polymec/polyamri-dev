@@ -12,7 +12,7 @@ struct amr_data_hierarchy_t
 {
   amr_grid_hierarchy_t* grids;
   int num_components;
-  ptr_array_t* patch_sets;
+  ptr_array_t* grid_data;
 };
 
 amr_data_hierarchy_t* amr_data_hierarchy_new(amr_grid_hierarchy_t* grids,
@@ -22,21 +22,21 @@ amr_data_hierarchy_t* amr_data_hierarchy_new(amr_grid_hierarchy_t* grids,
   amr_data_hierarchy_t* data = polymec_malloc(sizeof(amr_data_hierarchy_t));
   data->grids = grids;
   data->num_components = num_components;
-  data->patch_sets = ptr_array_new();
+  data->grid_data = ptr_array_new();
 
   int pos = 0;
   amr_grid_t* level;
   while (amr_grid_hierarchy_next_coarsest(grids, &pos, &level))
   {
-    amr_patch_set_t* patches = amr_grid_create_patches(level, data->num_components);
-    ptr_array_append_with_dtor(data->patch_sets, patches, DTOR(amr_patch_set_free));
+    amr_grid_data_t* grid_data = amr_grid_data_new(level, data->num_components);
+    ptr_array_append_with_dtor(data->grid_data, grid_data, DTOR(amr_grid_data_free));
   }
   return data;
 }
 
 void amr_data_hierarchy_free(amr_data_hierarchy_t* data)
 {
-  ptr_array_free(data->patch_sets);
+  ptr_array_free(data->grid_data);
   polymec_free(data);
 }
 
@@ -55,19 +55,21 @@ int amr_data_hierarchy_num_levels(amr_data_hierarchy_t* data)
   return amr_grid_hierarchy_num_levels(data->grids);
 }
 
-bool amr_data_hierarchy_next_coarsest(amr_data_hierarchy_t* data, int* pos, amr_patch_set_t** patch_set, amr_grid_t** level)
+bool amr_data_hierarchy_next_coarsest(amr_data_hierarchy_t* data, int* pos, amr_grid_data_t** grid_data)
 {
-  bool found = amr_grid_hierarchy_next_coarsest(data->grids, pos, level);
-  if (found)
-    *patch_set = data->patch_sets->data[*pos-1];
-  return found;
+  if (*pos >= data->grid_data->size)
+    return false;
+  *grid_data = data->grid_data->data[*pos];
+  ++(*pos);
+  return true;
 }
 
-bool amr_data_hierarchy_next_finest(amr_data_hierarchy_t* data, int* pos, amr_patch_set_t** patch_set, amr_grid_t** level)
+bool amr_data_hierarchy_next_finest(amr_data_hierarchy_t* data, int* pos, amr_grid_data_t** grid_data)
 {
-  bool found = amr_grid_hierarchy_next_finest(data->grids, pos, level);
-  if (found)
-    *patch_set = data->patch_sets->data[*pos-1];
-  return found;
+  if (*pos >= data->grid_data->size)
+    return false;
+  *grid_data = data->grid_data->data[data->grid_data->size - *pos - 1];
+  ++(*pos);
+  return true;
 }
 

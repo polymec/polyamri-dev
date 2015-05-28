@@ -30,7 +30,7 @@ typedef struct
 // patch's data using C99 variable-length arrays.
 // Note that patch->i1 + tile->i2 == (patch->i2 - tile->i1) + 2 * num_ghosts.
 #define DECLARE_AMR_PATCH_ARRAY(array, patch) \
-real_t (*array)[patch->i1 + patch->i2][patch->j1 + patch->j2][patch->nc] = patch->data
+real_t (*array)[patch->i1 + patch->i2][patch->j1 + patch->j2][patch->k1 + patch->k2] = patch->data
 
 // Creates a new patch of the given size with nc components and ng ghost indices.
 amr_patch_t* amr_patch_new(int ni, int nj, int nk, int nc, int ng);

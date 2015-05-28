@@ -19,17 +19,17 @@ amr_patch_t* amr_patch_new(int ni, int nj, int nk, int nc, int ng)
   // We allocate one big slab of memory for storage and lean on C99's 
   // VLA semantics.
   size_t storage_size = sizeof(real_t) * (ni+2*ng) * (nj+2*ng) * (nk+2*ng) * nc;
-  amr_patch_t* t = polymec_malloc(sizeof(amr_patch_t) + sizeof(real_t) * storage_size);
-  t->data = (char*)t + sizeof(amr_patch_t);
-  memset(t->data, 0, sizeof(real_t) * storage_size);
-  t->nc = nc;
-  t->i1 = ng;
-  t->i2 = ni + ng;
-  t->j1 = ng;
-  t->j2 = nj + ng;
-  t->k1 = ng;
-  t->k2 = nk + ng;
-  return t;
+  amr_patch_t* p = polymec_malloc(sizeof(amr_patch_t) + sizeof(real_t) * storage_size);
+  p->data = (char*)p + sizeof(amr_patch_t);
+  memset(p->data, 0, sizeof(real_t) * storage_size);
+  p->nc = nc;
+  p->i1 = ng;
+  p->i2 = ni + ng;
+  p->j1 = ng;
+  p->j2 = nj + ng;
+  p->k1 = ng;
+  p->k2 = nk + ng;
+  return p;
 }
 
 void amr_patch_free(amr_patch_t* t)

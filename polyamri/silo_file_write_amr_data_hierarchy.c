@@ -63,13 +63,12 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
     int* seg_ids = polymec_malloc(sizeof(int) * num_levels);
     int* num_level_patches = polymec_malloc(sizeof(int) * num_levels);
     int pos = 0, i = 0;
-    amr_patch_set_t* patches;
-    amr_grid_t* level;
-    while (amr_data_hierarchy_next_coarsest(hierarchy, &pos, &patches, &level))
+    amr_grid_data_t* grid_data;
+    while (amr_data_hierarchy_next_coarsest(hierarchy, &pos, &grid_data))
     {
       seg_ids[i] = i;
       seg_types[i] = DB_BLOCKCENT;
-      num_level_patches[i] = amr_patch_set_size(patches);
+      num_level_patches[i] = amr_grid_data_num_patches(grid_data);
       num_patches += num_level_patches[i];
       ++i;
     }

@@ -8,7 +8,7 @@
 #ifndef POLYAMRI_AMR_GRID_HIERARCHY_H
 #define POLYAMRI_AMR_GRID_HIERARCHY_H
 
-#include "polyamri/amr_grid.h"
+#include "polyamri/amr_grid_data.h"
 
 // A grid hierarchy is an object that manages a set of grid levels representing 
 // a composite grid for a quantity whose resolution is adaptive in space. The 

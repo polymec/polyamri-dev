@@ -8,6 +8,7 @@
 #include "core/array.h"
 #include "core/unordered_map.h"
 #include "polyamri/amr_grid.h"
+#include "polyamri/amr_patch.h"
 #include "polyamri/amr_grid_interpolator.h"
 
 // This is a descriptor for "types" of patches -- this determines the nature 
@@ -129,6 +130,12 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
                            amr_grid_neighbor_slot_t neighbor_slot,
                            amr_grid_t* neighbor)
 {
+  ASSERT(!(grid->x_periodic && (neighbor_slot == AMR_GRID_X1_NEIGHBOR)));
+  ASSERT(!(grid->x_periodic && (neighbor_slot == AMR_GRID_X2_NEIGHBOR)));
+  ASSERT(!(grid->y_periodic && (neighbor_slot == AMR_GRID_Y1_NEIGHBOR)));
+  ASSERT(!(grid->y_periodic && (neighbor_slot == AMR_GRID_Y2_NEIGHBOR)));
+  ASSERT(!(grid->z_periodic && (neighbor_slot == AMR_GRID_Z1_NEIGHBOR)));
+  ASSERT(!(grid->z_periodic && (neighbor_slot == AMR_GRID_Z2_NEIGHBOR)));
   grid->neighbors[neighbor_slot] = neighbor;
 }
 
@@ -258,6 +265,21 @@ void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity)
   periodicity[2] = grid->z_periodic;
 }
 
+void amr_grid_get_extents(amr_grid_t* grid, int* nx, int* ny, int* nz)
+{
+  *nx = grid->nx;
+  *ny = grid->ny;
+  *nz = grid->nz;
+}
+
+void amr_grid_get_patch_size(amr_grid_t* grid, int* px, int* py, int* pz, int* ng)
+{
+  *px = grid->px;
+  *py = grid->py;
+  *pz = grid->pz;
+  *ng = grid->ng;
+}
+
 int amr_grid_num_patches(amr_grid_t* grid)
 {
   return grid->num_patches;
@@ -273,40 +295,9 @@ static inline amr_grid_interpolator_t* get_interpolator(amr_grid_t* grid, int i,
   return grid->interpolators[grid->nz*grid->ny*i + grid->nz*j + k];
 }
 
-static inline bool local_patch_is_present(amr_grid_t* grid, int i, int j, int k)
+bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k)
 {
   return (get_patch_type(grid, i, j, k) == LOCAL_SAME_LEVEL);
-}
-
-amr_patch_set_t* amr_grid_create_patches(amr_grid_t* grid, int num_components)
-{
-  ASSERT(num_components > 0);
-
-  amr_patch_set_t* patches = amr_patch_set_new();
-  real_t dx = (grid->domain.x2 - grid->domain.x1) / grid->nx;
-  real_t dy = (grid->domain.y2 - grid->domain.y1) / grid->ny;
-  real_t dz = (grid->domain.z2 - grid->domain.z1) / grid->nz;
-  for (int i = 0; i < grid->nx; ++i)
-  {
-    for (int j = 0; j < grid->ny; ++j)
-    {
-      for (int k = 0; k < grid->nz; ++k)
-      {
-        if (local_patch_is_present(grid, i, j, k))
-        {
-          amr_patch_t* patch = amr_patch_new(grid->px, grid->py, grid->pz, num_components, grid->ng);
-          bbox_t domain = {.x1 = grid->domain.x1 + i*dx, 
-                           .x2 = grid->domain.x1 + (i+1)*dx,
-                           .y1 = grid->domain.y1 + j*dx, 
-                           .y2 = grid->domain.y1 + (j+1)*dy,
-                           .z1 = grid->domain.z1 + k*dz, 
-                           .z2 = grid->domain.z1 + (k+1)*dz};
-          amr_patch_set_add(patches, patch, &domain);
-        }
-      }
-    }
-  }
-  return patches;
 }
 
 static int local_copy_west_to_east(amr_grid_t* grid, 
@@ -703,9 +694,9 @@ static void finish_remote_coarse_to_fine_interpolation(amr_grid_t* grid, int tok
 {
 }
 
+#if 0
 void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
 {
-#if 0
   // Simply go through the instructions we set up before.
   for (int i = 0; i < grid->ghost_fillers->size; ++i)
   {
@@ -809,7 +800,6 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
       }
     }
   }
-#endif
 }
 
 void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
@@ -836,3 +826,4 @@ void amr_grid_fill_ghosts(amr_grid_t* grid, amr_patch_set_t* patches)
   amr_grid_start_filling_ghosts(grid, patches);
   amr_grid_finish_filling_ghosts(grid, patches);
 }
+#endif

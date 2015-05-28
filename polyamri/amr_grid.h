@@ -8,7 +8,7 @@
 #ifndef POLYAMRI_AMR_GRID_H
 #define POLYAMRI_AMR_GRID_H
 
-#include "polyamri/amr_patch_set.h"
+#include "core/point.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
 // of uniformly-sized patches (with any associated data). The grid manages
@@ -22,12 +22,12 @@ typedef struct amr_grid_t amr_grid_t;
 // Neighbor slots.
 typedef enum
 {
-  AMR_GRID_X1 = 0,
-  AMR_GRID_X2 = 1,
-  AMR_GRID_Y1 = 2,
-  AMR_GRID_Y2 = 3,
-  AMR_GRID_Z1 = 4,
-  AMR_GRID_Z2 = 5
+  AMR_GRID_X1_NEIGHBOR = 0,
+  AMR_GRID_X2_NEIGHBOR = 1,
+  AMR_GRID_Y1_NEIGHBOR = 2,
+  AMR_GRID_Y2_NEIGHBOR = 3,
+  AMR_GRID_Z1_NEIGHBOR = 4,
+  AMR_GRID_Z2_NEIGHBOR = 5
 } amr_grid_neighbor_slot_t;
 
 //------------------------------------------------------------------------
@@ -61,14 +61,13 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
                            amr_grid_neighbor_slot_t neighbor_slot,
                            amr_grid_t* neighbor);
 
-// Associates a piece of data with this grid. The association is made using a 
-// data index that uniquely identifies the datum. An optional destructor 
-// function specifies how the datum should be destroyed when the grid is 
-// destroyed.
-void amr_grid_set_data(amr_grid_t* grid,
-                       int data_index,
-                       void* data,
-                       void (*data_dtor)(void* data));
+// Associates a named property (datum) with this grid. An optional 
+// destructor function specifies how the datum should be destroyed when the 
+// grid is destroyed.
+void amr_grid_set_property(amr_grid_t* grid,
+                           const char* name,
+                           void* property,
+                           void (*data_dtor)(void* data));
 
 // Associates a finer grid with this one, with the given refinement ratio 
 // (which must be a power of 2).
@@ -99,25 +98,33 @@ void amr_grid_finalize(amr_grid_t* grid);
 // fully constructed and finalized.
 //------------------------------------------------------------------------
 
-// Returns the number of patches in this grid.
+// Fetches the number of patches in this grid in the x, y, and z directions, 
+// placing them in nx, ny, nz.
+void amr_grid_get_extents(amr_grid_t* grid, int* nx, int* ny, int* nz);
+
+// Fetches the number of cells in each patch on this grid in the x, y, and z 
+// directions, placing them in px, py, pz. Additionally, the number of ghost 
+// cells is placed in ng.
+void amr_grid_get_patch_size(amr_grid_t* grid, int* px, int* py, int* pz, int* ng);
+
+// Returns the number of patches that can be stored on this grid.
 int amr_grid_num_patches(amr_grid_t* grid);
 
 // Returns the bounding box describing the region represented by this grid.
 bbox_t* amr_grid_domain(amr_grid_t* grid);
 
+// Returns true if the grid has a local patch at (i, j, k), false if not.
+bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k);
+
 // Queries the periodicity of the grid, placing booleans for the 
-// x, y, and z periodicity into the given periodicity array.
+// x, y, and z periodicity into the given (3-wide) periodicity array.
 void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity);
 
-// Retrieves a piece of data from this grid given its index, or returns 
+// Retrieves the property with the given name from this grid, or returns 
 // NULL if no data is associated using that index.
-void* amr_grid_data(amr_grid_t* grid,
-                    int data_index);
+void* amr_grid_property(amr_grid_t* grid, const char* name);
 
-// Creates a new set of AMR patches associated with the given grid. This 
-// patch set must be deallocated with amr_patch_set_free.
-amr_patch_set_t* amr_grid_create_patches(amr_grid_t* grid, int num_components);
-
+#if 0
 // Fills all ghost cells in the patches within the given patch set, 
 // communicating with other grids as needed.
 void amr_grid_fill_ghosts(amr_grid_t* grid, amr_patch_set_t* patches);
@@ -129,6 +136,7 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches);
 // Concludes an asynchronous ghost-cell-filling operation initiated by 
 // a call to amr_grid_start_filling_ghosts().
 void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_patch_set_t* patches);
+#endif
 
 #endif
 
