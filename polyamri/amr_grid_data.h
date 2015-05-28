@@ -42,5 +42,17 @@ bool amr_grid_data_next(amr_grid_data_t* grid_data, int* pos,
                         int* i, int* j, int* k, 
                         amr_patch_t** patch, bbox_t** bbox);
 
+
+// Fills all ghost cells in the amr_grid_data's patches.
+void amr_grid_data_fill_ghosts(amr_grid_data_t* grid_data);
+
+// Begins an asynchronous ghost-cell-filling operation.
+// communicating with other grids as needed. 
+void amr_grid_data_start_filling_ghosts(amr_grid_data_t* grid_data);
+
+// Concludes an asynchronous ghost-cell-filling operation initiated by 
+// a call to amr_grid_data_start_filling_ghosts().
+void amr_grid_data_finish_filling_ghosts(amr_grid_data_t* grid_data);
+
 #endif
 

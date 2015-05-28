@@ -133,3 +133,18 @@ bool amr_grid_data_next(amr_grid_data_t* grid_data, int* pos,
   return false;
 }
 
+void amr_grid_data_fill_ghosts(amr_grid_data_t* grid_data)
+{
+  amr_grid_fill_ghosts(grid_data->grid, grid_data);
+}
+
+void amr_grid_data_start_filling_ghosts(amr_grid_data_t* grid_data)
+{
+  amr_grid_start_filling_ghosts(grid_data->grid, grid_data);
+}
+
+void amr_grid_data_finish_filling_ghosts(amr_grid_data_t* grid_data)
+{
+  amr_grid_finish_filling_ghosts(grid_data->grid, grid_data);
+}
+

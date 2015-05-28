@@ -37,7 +37,7 @@ typedef struct
 // filling ghost cells.
 typedef struct
 {
-  int (*method)(amr_grid_t*, int, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
+  void (*method)(amr_grid_t*, int, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
   int token;
   amr_patch_t* dest_patch;
   int i_dest, j_dest, k_dest;
@@ -699,7 +699,9 @@ static int start_remote_ghost_copy(amr_grid_t* grid,
   return -1;
 }
 
-static void finish_remote_ghost_copy(amr_grid_t* grid, int token)
+static void finish_remote_ghost_copy(amr_grid_t* grid, int token,
+                                     amr_patch_t* dest, int i_dest, int j_dest, int k_dest, 
+                                     amr_patch_t* src,  int i_src, int j_src, int k_src)
 {
 }
 
@@ -759,104 +761,6 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
       ptr_array_append_with_dtor(grid->ghost_filler_finishers, finisher, polymec_free);
     }
   }
-#if 0
-  // If we made this patch set, we know how it's indexed. Get pointers 
-  // to each of the local patches within.
-  int pos = 0;
-  amr_patch_t* patch_ptrs[grid->nx][grid->ny][grid->nz];
-  for (int i = 0; i < grid->nx; ++i)
-  {
-    for (int j = 0; j < grid->ny; ++j)
-    {
-      for (int k = 0; k < grid->nz; ++k)
-      {
-        bbox_t* domain = NULL;
-        patch_ptrs[i][j][k] = NULL;
-        if (local_patch_is_present(grid, i, j, k))
-          amr_patch_set_next(patches, &pos, &patch_ptrs[i][j][k], &domain);
-      }
-    }
-  }
-
-  // Now perform all local copies.
-  for (int i = 0; i < grid->nx; ++i)
-  {
-    for (int j = 0; j < grid->ny; ++j)
-    {
-      for (int k = 0; k < grid->nz; ++k)
-      {
-        amr_patch_t* dest = patch_ptrs[i][j][k];
-        if (dest == NULL) continue;
-
-        if (i > 0)
-        {
-          amr_patch_t* src = patch_ptrs[i-1][j][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i-1, j, k);
-        }
-        else if (grid->x_periodic)
-        {
-          amr_patch_t* src = patch_ptrs[grid->nx-1][j][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, grid->nx-1, j, k);
-        }
-
-        if (i < grid->nx-1)
-        {
-          amr_patch_t* src = patch_ptrs[i+1][j][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i+1, j, k);
-        }
-        else if (grid->x_periodic)
-        {
-          amr_patch_t* src = patch_ptrs[0][j][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, 0, j, k);
-        }
-
-        if (j > 0)
-        {
-          amr_patch_t* src = patch_ptrs[i][j-1][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, j-1, k);
-        }
-        else if (grid->y_periodic)
-        {
-          amr_patch_t* src = patch_ptrs[i][grid->ny-1][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, grid->ny-1, k);
-        }
-
-        if (j < grid->ny-1)
-        {
-          amr_patch_t* src = patch_ptrs[i][j+1][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, j+1, k);
-        }
-        else if (grid->y_periodic)
-        {
-          amr_patch_t* src = patch_ptrs[i][0][k];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, 0, k);
-        }
-
-        if (k > 0)
-        {
-          amr_patch_t* src = patch_ptrs[i][j][k-1];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, j, k-1);
-        }
-        else if (grid->z_periodic)
-        {
-          amr_patch_t* src = patch_ptrs[i][j][grid->nz-1];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, j, grid->nz-1);
-        }
-
-        if (k < grid->ny-1)
-        {
-          amr_patch_t* src = patch_ptrs[i][j][k+1];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, j, k+1);
-        }
-        else if (grid->z_periodic)
-        {
-          amr_patch_t* src = patch_ptrs[i][j][0];
-          int token = start_filling_ghosts(grid, dest, i, j, k, src, i, j, 0);
-        }
-      }
-    }
-  }
-#endif
 }
 
 void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
