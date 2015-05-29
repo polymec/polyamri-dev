@@ -5,6 +5,7 @@ add_custom_target(update_polyamri_c ALL
 # Library.
 add_library(polyamri polyamri.c amr_patch.c amr_grid.c amr_grid_data.c
             amr_grid_interpolator.c amr_grid_hierarchy.c amr_data_hierarchy.c 
+            amr_grid_assembly.c
             linear_amr_grid_interpolator.c
             silo_file_write_amr_data_hierarchy.c)
 #            interpreter_register_amr_functions.c)
