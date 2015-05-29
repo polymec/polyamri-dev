@@ -32,8 +32,18 @@ amr_patch_t* amr_patch_new(int ni, int nj, int nk, int nc, int ng)
   return p;
 }
 
-void amr_patch_free(amr_patch_t* t)
+amr_patch_t* amr_patch_clone(amr_patch_t* patch)
 {
-  polymec_free(t);
+  int nc = patch->nc;
+  int ng = patch->i1;
+  int ni = patch->i2 - ng;
+  int nj = patch->j2 - ng;
+  int nk = patch->k2 - ng;
+  return amr_patch_new(ni, nj, nk, nc, ng);
+}
+
+void amr_patch_free(amr_patch_t* patch)
+{
+  polymec_free(patch);
 }
 

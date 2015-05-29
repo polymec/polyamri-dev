@@ -30,16 +30,15 @@ static void static_linear_interpolate(void* context, int si1, int si2, int sj1, 
   // FIXME
 }
 
-amr_grid_interpolator_t* static_linear_amr_grid_interpolator_new(amr_patch_t* source_tile)
+amr_grid_interpolator_t* static_linear_amr_grid_interpolator_new()
 {
   amr_grid_interpolator_vtable vtable = {.interpolate = static_linear_interpolate};
-  return amr_grid_interpolator_new("Static linear interpolator", source_tile, vtable);
+  return amr_grid_interpolator_new("Static linear interpolator", NULL, vtable);
 }
 
 typedef struct 
 {
   real_t alpha;
-  amr_patch_t *patch1, *patch2;
 } dyn_interp_t;
 
 static void dynamic_linear_interpolate(void* context, int si1, int si2, int sj1, int sj2, int sk1, int sk2, 
@@ -48,21 +47,26 @@ static void dynamic_linear_interpolate(void* context, int si1, int si2, int sj1,
   // FIXME
 }
 
+static void* dynamic_clone(void* context)
+{
+  dyn_interp_t* dyn = context;
+  dyn_interp_t* new_dyn = polymec_malloc(sizeof(dyn_interp_t));
+  memcpy(new_dyn, dyn, sizeof(dyn_interp_t));
+  return new_dyn;
+}
+
 static void dynamic_free(void* context)
 {
   dyn_interp_t* dyn = context;
   polymec_free(dyn);
 }
 
-amr_grid_interpolator_t* dynamic_linear_amr_grid_interpolator_new(amr_patch_t* patch1, amr_patch_t* patch2)
+amr_grid_interpolator_t* dynamic_linear_amr_grid_interpolator_new(real_t alpha)
 {
-  ASSERT(patch1 != patch2);
-
   dyn_interp_t* dyn = polymec_malloc(sizeof(dyn_interp_t));
-  dyn->alpha = 0.0;
-  dyn->patch1 = patch1;
-  dyn->patch2 = patch2;
+  dyn->alpha = alpha;
   amr_grid_interpolator_vtable vtable = {.interpolate = dynamic_linear_interpolate, 
+                                         .clone = dynamic_clone,
                                          .dtor = dynamic_free};
   return amr_grid_interpolator_new("Dynamic linear interpolator", dyn, vtable);
 }

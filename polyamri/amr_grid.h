@@ -9,6 +9,7 @@
 #define POLYAMRI_AMR_GRID_H
 
 #include "core/point.h"
+#include "polyamri/amr_grid_interpolator.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
 // of uniformly-sized patches (with any associated data). The grid manages
@@ -41,8 +42,7 @@ typedef enum
 
 // Creates a new empty grid level defined on the region filling the given 
 // bounding box, with nx x ny x nz patches of size px x py x pz. Each patch has 
-// the given number of ghost cells.
-// This grid is not associated with any other grids.
+// the given number of ghost cells. This grid is not associated with any other grids.
 amr_grid_t* amr_grid_new(bbox_t* domain, 
                          int nx, int ny, int nz, 
                          int px, int py, int pz,
@@ -56,10 +56,12 @@ void amr_grid_free(amr_grid_t* grid);
 
 // Sets the given AMR grid as a neighbor of this one. "The neighbor slot" 
 // identifies which of the neighbor "slots" will be occupied by the neighbor
-// grid. This AMR grid borrows the reference to the neighbor grid.
+// grid. The given interpolator is used to transfer data from the other grid 
+// to this one. The AMR grid borrows the reference to the neighbor grid.
 void amr_grid_set_neighbor(amr_grid_t* grid, 
                            amr_grid_neighbor_slot_t neighbor_slot,
-                           amr_grid_t* neighbor);
+                           amr_grid_t* neighbor,
+                           amr_grid_interpolator_t* interpolator);
 
 // Associates a named property (datum) with this grid. An optional 
 // destructor function specifies how the datum should be destroyed when the 
@@ -70,12 +72,20 @@ void amr_grid_set_property(amr_grid_t* grid,
                            void (*property_dtor)(void* property));
 
 // Associates a finer grid with this one, with the given refinement ratio 
-// (which must be a power of 2).
-void amr_grid_associate_finer(amr_grid_t* grid, amr_grid_t* finer_grid, int ref_ratio);
+// (which must be a power of 2). The given interpolator is used to transfer 
+// data from the finer grid to this one.
+void amr_grid_associate_finer(amr_grid_t* grid, 
+                              amr_grid_t* finer_grid, 
+                              int ref_ratio,
+                              amr_grid_interpolator_t* interpolator);
 
 // Associates a coarser grid with this one, with the given refinement ratio 
-// (which must be a power of 2).
-void amr_grid_associate_coarser(amr_grid_t* grid, amr_grid_t* coarser_grid, int ref_ratio);
+// (which must be a power of 2). The given interpolator is used to transfer
+// data from the coarser grid to this one.
+void amr_grid_associate_coarser(amr_grid_t* grid, 
+                                amr_grid_t* coarser_grid, 
+                                int ref_ratio,
+                                amr_grid_interpolator_t* interpolator);
 
 // Inserts a new local patch at (i, j, k) in the nx x ny x nz array of patches.
 // No patch may exist (locally, remotely, or at another grid) at (i, j, k).

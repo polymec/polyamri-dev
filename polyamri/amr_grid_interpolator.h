@@ -19,6 +19,9 @@ typedef struct amr_grid_interpolator_t amr_grid_interpolator_t;
 // This function interpolates values from one patch to another.
 typedef void (*amr_grid_interpolator_interpolate_func)(void* context, int si1, int si2, int sj1, int sj2, int sk1, int sk2, int di1, int di2, int dj1, int dj2, int dk1, int dk2, amr_patch_t* dest_patch);
 
+// This function clones the context for the interpreter.
+typedef void* (*amr_grid_interpolator_clone_func)(void* context);
+
 // This function destroys an interpolator context.
 typedef void (*amr_grid_interpolator_dtor)(void* context);
 
@@ -26,6 +29,7 @@ typedef void (*amr_grid_interpolator_dtor)(void* context);
 typedef struct
 {
   amr_grid_interpolator_interpolate_func interpolate;
+  amr_grid_interpolator_clone_func clone;
   amr_grid_interpolator_dtor dtor;
 } amr_grid_interpolator_vtable;
 
@@ -37,6 +41,9 @@ amr_grid_interpolator_t* amr_grid_interpolator_new(const char* name,
 
 // Destroys the given grid interpolator.
 void amr_grid_interpolator_free(amr_grid_interpolator_t* interp);
+
+// Creates a deep copy of this interpolator.
+amr_grid_interpolator_t* amr_grid_interpolator_clone(amr_grid_interpolator_t* interp);
 
 // Allows access to the context pointer within the interpolator.
 void* amr_grid_interpolator_context(amr_grid_interpolator_t* interp);

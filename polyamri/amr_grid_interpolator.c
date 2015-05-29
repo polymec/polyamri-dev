@@ -19,6 +19,7 @@ amr_grid_interpolator_t* amr_grid_interpolator_new(const char* name,
                                                    amr_grid_interpolator_vtable vtable)
 {
   ASSERT(vtable.interpolate != NULL);
+  ASSERT((vtable.clone != NULL) || (context == NULL));
 
   amr_grid_interpolator_t* interp = polymec_malloc(sizeof(amr_grid_interpolator_t));
   interp->name = string_dup(name);
@@ -33,6 +34,13 @@ void amr_grid_interpolator_free(amr_grid_interpolator_t* interp)
     interp->vtable.dtor(interp->context);
   polymec_free(interp->name);
   polymec_free(interp);
+}
+
+amr_grid_interpolator_t* amr_grid_interpolator_clone(amr_grid_interpolator_t* interp)
+{
+  return amr_grid_interpolator_new(string_dup(interp->name),
+                                   interp->vtable.clone(interp->context),
+                                   interp->vtable);
 }
 
 void* amr_grid_interpolator_context(amr_grid_interpolator_t* interp)

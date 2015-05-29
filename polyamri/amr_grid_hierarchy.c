@@ -14,6 +14,7 @@ struct amr_grid_hierarchy_t
   int nx, ny, nz, px, py, pz;
   int num_ghosts, ref_ratio;
   bool x_periodic, y_periodic, z_periodic;
+  amr_grid_interpolator_t* interpolator;
   ptr_array_t* levels;
 };
 
@@ -21,7 +22,8 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain,
                                              int nx, int ny, int nz, 
                                              int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
-                                             bool periodic_in_x, bool periodic_in_y, bool periodic_in_z)
+                                             bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
+                                             amr_grid_interpolator_t* interpolator)
 {
   ASSERT(domain->x2 > domain->x1);
   ASSERT(domain->y2 > domain->y1);
@@ -44,6 +46,7 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain,
   hierarchy->x_periodic = periodic_in_x;
   hierarchy->y_periodic = periodic_in_y;
   hierarchy->z_periodic = periodic_in_z;
+  hierarchy->interpolator = interpolator;
   hierarchy->levels = ptr_array_new();
   return hierarchy;
 }
@@ -106,8 +109,8 @@ amr_grid_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
   if (num_levels > 0)
   {
     amr_grid_t* coarser = hierarchy->levels->data[num_levels-1];
-    amr_grid_associate_finer(coarser, new_level, ref_ratio);
-    amr_grid_associate_coarser(new_level, coarser, ref_ratio);
+    amr_grid_associate_finer(coarser, new_level, ref_ratio, amr_grid_interpolator_clone(hierarchy->interpolator));
+    amr_grid_associate_coarser(new_level, coarser, ref_ratio, amr_grid_interpolator_clone(hierarchy->interpolator));
   }
 
   return new_level;

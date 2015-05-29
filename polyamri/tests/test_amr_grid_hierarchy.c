@@ -11,11 +11,13 @@
 #include <string.h>
 #include "cmockery.h"
 #include "polyamri/amr_grid_hierarchy.h"
+#include "polyamri/linear_amr_grid_interpolator.h"
 
 void test_ctor(void** state) 
 {
   bbox_t domain = {.x1 = 0.0, .x2 = 1.0, .y1 = 0.0, .y2 = 1.0, .z1 = 0.0, .z2 = 1.0};
-  amr_grid_hierarchy_t* h = amr_grid_hierarchy_new(&domain, 4, 4, 4, 16, 16, 16, 1, 2, false, false, false);
+  amr_grid_interpolator_t* I = static_linear_amr_grid_interpolator_new();
+  amr_grid_hierarchy_t* h = amr_grid_hierarchy_new(&domain, 4, 4, 4, 16, 16, 16, 1, 2, false, false, false, I);
   assert_int_equal(0, amr_grid_hierarchy_num_levels(h));
   assert_int_equal(1, amr_grid_hierarchy_num_ghosts(h));
   assert_int_equal(2, amr_grid_hierarchy_ref_ratio(h));

@@ -25,7 +25,8 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain,
                                              int nx, int ny, int nz, 
                                              int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
-                                             bool periodic_in_x, bool periodic_in_y, bool periodic_in_z);
+                                             bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
+                                             amr_grid_interpolator_t* interpolator);
 
 // Destroys the given grid hierarchy and all of its levels.
 void amr_grid_hierarchy_free(amr_grid_hierarchy_t* hierarchy);

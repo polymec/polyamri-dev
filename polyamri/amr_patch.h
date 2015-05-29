@@ -35,8 +35,11 @@ real_t (*array)[patch->i1 + patch->i2][patch->j1 + patch->j2][patch->k1 + patch-
 // Creates a new patch of the given size with nc components and ng ghost indices.
 amr_patch_t* amr_patch_new(int ni, int nj, int nk, int nc, int ng);
 
+// Creates a deep copy of the patch.
+amr_patch_t* amr_patch_clone(amr_patch_t* patch);
+
 // Frees the given patch.
-void amr_patch_free(amr_patch_t* t);
+void amr_patch_free(amr_patch_t* patch);
 
 #endif
 

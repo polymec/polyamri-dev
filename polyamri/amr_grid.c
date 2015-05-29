@@ -51,16 +51,18 @@ struct amr_grid_t
   int nx, ny, nz, px, py, pz, ng, num_patches;
   patch_type_t* patch_types;
   int* remote_owners;
-  amr_grid_interpolator_t** interpolators;
   bool x_periodic, y_periodic, z_periodic;
 
   // Relationships with other grids.
   int ref_ratio;
   amr_grid_t* coarser;
+  amr_grid_interpolator_t* coarse_interpolator;
   amr_grid_t* finer;
+  amr_grid_interpolator_t* fine_interpolator;
 
-  // Neighboring grids.
+  // Neighboring grids and interpolators.
   amr_grid_t* neighbors[6];
+  amr_grid_interpolator_t* neighbor_interpolators[6];
 
   // Associated properties.
   string_ptr_unordered_map_t* properties;
@@ -107,16 +109,23 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   grid->z_periodic = periodic_in_z;
   grid->patch_types = polymec_malloc(sizeof(patch_type_t) * nx * ny * nz);
   grid->remote_owners = polymec_malloc(sizeof(int) * nx * ny * nz);
-  grid->interpolators = polymec_malloc(sizeof(amr_grid_interpolator_t*) * nx * ny * nz);
   for (int i = 0; i < nx * ny * nz; ++i)
   {
     grid->patch_types[i] = NO_PATCH;
     grid->remote_owners[i] = -1;
-    grid->interpolators[i] = NULL;
   }
 
   grid->ref_ratio = 0;
-  grid->coarser = grid->finer = NULL;
+  grid->coarser = NULL;
+  grid->coarse_interpolator = NULL;
+  grid->finer = NULL;
+  grid->fine_interpolator = NULL;
+
+  for (int n = 0; n < 6; ++n)
+  {
+    grid->neighbors[n] = NULL;
+    grid->neighbor_interpolators[n] = NULL;
+  }
 
   grid->properties = string_ptr_unordered_map_new();
   grid->ghost_filler_starters = ptr_array_new();
@@ -128,13 +137,16 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
 
 void amr_grid_free(amr_grid_t* grid)
 {
-  for (int i = 0; i < grid->num_patches; ++i)
+  for (int n = 0; n < 6; ++n)
   {
-    if (grid->interpolators[i] != NULL)
-      amr_grid_interpolator_free(grid->interpolators[i]);
+    if (grid->neighbor_interpolators[n] != NULL)
+      amr_grid_interpolator_free(grid->neighbor_interpolators[n]);
   }
+  if (grid->coarse_interpolator != NULL)
+    amr_grid_interpolator_free(grid->coarse_interpolator);
+  if (grid->fine_interpolator != NULL)
+    amr_grid_interpolator_free(grid->fine_interpolator);
   polymec_free(grid->patch_types);
-  polymec_free(grid->interpolators);
   polymec_free(grid->remote_owners);
   string_ptr_unordered_map_free(grid->properties);
   ptr_array_free(grid->ghost_filler_starters);
@@ -144,7 +156,8 @@ void amr_grid_free(amr_grid_t* grid)
 
 void amr_grid_set_neighbor(amr_grid_t* grid, 
                            amr_grid_neighbor_slot_t neighbor_slot,
-                           amr_grid_t* neighbor)
+                           amr_grid_t* neighbor,
+                           amr_grid_interpolator_t* interpolator)
 {
   ASSERT(!(grid->x_periodic && (neighbor_slot == AMR_GRID_X1_NEIGHBOR)));
   ASSERT(!(grid->x_periodic && (neighbor_slot == AMR_GRID_X2_NEIGHBOR)));
@@ -153,6 +166,7 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
   ASSERT(!(grid->z_periodic && (neighbor_slot == AMR_GRID_Z1_NEIGHBOR)));
   ASSERT(!(grid->z_periodic && (neighbor_slot == AMR_GRID_Z2_NEIGHBOR)));
   grid->neighbors[neighbor_slot] = neighbor;
+  grid->neighbor_interpolators[neighbor_slot] = interpolator;
 }
 
 void amr_grid_set_property(amr_grid_t* grid,
@@ -173,7 +187,10 @@ void* amr_grid_property(amr_grid_t* grid,
     return NULL;
 }
 
-void amr_grid_associate_finer(amr_grid_t* grid, amr_grid_t* finer_grid, int ref_ratio)
+void amr_grid_associate_finer(amr_grid_t* grid, 
+                              amr_grid_t* finer_grid, 
+                              int ref_ratio,
+                              amr_grid_interpolator_t* interpolator)
 {
   ASSERT(ref_ratio > 0);
   ASSERT((grid->ref_ratio == 0) || (grid->ref_ratio == ref_ratio));
@@ -182,9 +199,13 @@ void amr_grid_associate_finer(amr_grid_t* grid, amr_grid_t* finer_grid, int ref_
     grid->ref_ratio = ref_ratio;
 
   grid->finer = finer_grid;
+  grid->fine_interpolator = interpolator;
 }
 
-void amr_grid_associate_coarser(amr_grid_t* grid, amr_grid_t* coarser_grid, int ref_ratio)
+void amr_grid_associate_coarser(amr_grid_t* grid, 
+                                amr_grid_t* coarser_grid, 
+                                int ref_ratio,
+                                amr_grid_interpolator_t* interpolator)
 {
   ASSERT(ref_ratio > 0);
   ASSERT((grid->ref_ratio == 0) || (grid->ref_ratio == ref_ratio));
@@ -193,6 +214,7 @@ void amr_grid_associate_coarser(amr_grid_t* grid, amr_grid_t* coarser_grid, int 
     grid->ref_ratio = ref_ratio;
 
   grid->coarser = coarser_grid;
+  grid->coarse_interpolator = interpolator;
 }
 
 void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k)
@@ -319,11 +341,6 @@ int amr_grid_num_patches(amr_grid_t* grid)
 static inline patch_type_t get_patch_type(amr_grid_t* grid, int i, int j, int k)
 {
   return grid->patch_types[grid->nz*grid->ny*i + grid->nz*j + k];
-}
-
-static inline amr_grid_interpolator_t* get_interpolator(amr_grid_t* grid, int i, int j, int k)
-{
-  return grid->interpolators[grid->nz*grid->ny*i + grid->nz*j + k];
 }
 
 bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k)
@@ -546,7 +563,7 @@ static int local_fine_to_coarse_west_to_east(amr_grid_t* grid,
       for (int K = 0; K < ref_ratio; ++K)
       {
         int k_fine = ref_ratio * k_src;
-        amr_grid_interpolator_t* interp = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
+        amr_grid_interpolator_t* interp; // = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
         if (interp == NULL) // no finer patch beneath us
           continue;
 
@@ -591,7 +608,7 @@ static int local_fine_to_coarse_east_to_west(amr_grid_t* grid,
       for (int K = 0; K < ref_ratio; ++K)
       {
         int k_fine = ref_ratio * k_src;
-        amr_grid_interpolator_t* interp = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
+        amr_grid_interpolator_t* interp;// = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
         if (interp == NULL) // no finer patch beneath us
           continue;
 
@@ -633,7 +650,7 @@ static void local_fine_to_coarse_interpolation(amr_grid_t* grid,
       for (int K = 0; K < ref_ratio; ++K)
       {
         int k_fine = ref_ratio * k_src;
-        amr_grid_interpolator_t* interp = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
+        amr_grid_interpolator_t* interp;// = get_interpolator(grid->finer, i_fine, j_fine, k_fine);
         if (interp == NULL) // no finer patch beneath us
           continue;
 

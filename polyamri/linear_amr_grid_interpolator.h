@@ -29,11 +29,11 @@
 
 // Creates a "static" interpolator that linearly interpolates data from the
 // given source patch.
-amr_grid_interpolator_t* static_linear_amr_grid_interpolator_new(amr_patch_t* source_patch);
+amr_grid_interpolator_t* static_linear_amr_grid_interpolator_new();
 
 // Creates a "dynamic" interpolator that linearly interpolates data from a 
 // linear combination of source patches (1 - alpha) * patch1 + alpha * patch2.
-amr_grid_interpolator_t* dynamic_linear_amr_grid_interpolator_new(amr_patch_t* patch1, amr_patch_t* patch2);
+amr_grid_interpolator_t* dynamic_linear_amr_grid_interpolator_new(real_t alpha);
 
 // Sets the interpolation coefficient alpha for the dynamic linear grid 
 // interpolator.
