@@ -5,7 +5,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "polyamri/silo_file_write_amr_data_hierarchy.h"
+#include "polyamri/silo_file_amr_methods.h"
 #include "silo.h"
 #include "pmpio.h"
 
@@ -37,6 +37,25 @@ struct silo_file_t
   ptr_array_t* multivars;
 #endif
 };
+
+void silo_file_write_amr_grid(silo_file_t* file, 
+                              const char* grid_name,
+                              amr_grid_t* grid)
+{
+}
+
+void silo_file_write_amr_grid_data(silo_file_t* file, 
+                                   const char* data_name,
+                                   amr_grid_data_t* grid_data,
+                                   silo_field_metadata_t** field_metadata)
+{
+}
+
+void silo_file_write_amr_grid_hierarchy(silo_file_t* file, 
+                                        const char* hierarchy_name,
+                                        amr_grid_hierarchy_t* hierarchy)
+{
+}
 
 void silo_file_write_amr_data_hierarchy(silo_file_t* file, 
                                         const char* hierarchy_name,
