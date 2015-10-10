@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "silo.h"
-#include "core/declare_nd_array.h"
 #include "polyamri/silo_file_amr_methods.h"
 
 #if POLYMEC_HAVE_DOUBLE_PRECISION
