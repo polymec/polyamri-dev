@@ -24,6 +24,9 @@ typedef struct
 
   // The start and end indices in i, j, k for the patch.
   int i1, i2, j1, j2, k1, k2;
+
+  // The number of ghost cells.
+  int ng;
 } amr_patch_t;
 
 // This macro generates a multidimensional array that can access the given

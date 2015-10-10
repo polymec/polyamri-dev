@@ -5,13 +5,202 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "polyamri/silo_file_amr_methods.h"
 #include "silo.h"
-#include "pmpio.h"
+#include "core/declare_nd_array.h"
+#include "polyamri/silo_file_amr_methods.h"
+
+#if POLYMEC_HAVE_DOUBLE_PRECISION
+#define SILO_FLOAT_TYPE DB_DOUBLE
+#else
+#define SILO_FLOAT_TYPE DB_FLOAT
+#endif
 
 // These functions are implemented in polymec/core/silo_file.c, and used 
 // here, even though they are not part of polymec's API.
 extern DBfile* silo_file_dbfile(silo_file_t* file);
+
+void silo_file_write_amr_patch(silo_file_t* file, 
+                               const char* patch_name,
+                               amr_patch_t* patch,
+                               bbox_t* bbox)
+{
+  DBfile* dbfile = silo_file_dbfile(file);
+
+  // Name the coordinate axes.
+  const char* const coord_names[3] = {"x", "y", "z"};
+
+  // Provide coordinates.
+  int nx = patch->i2 - patch->i1, 
+      ny = patch->j2 - patch->j1, 
+      nz = patch->k2 - patch->k1;
+  ASSERT(nx > 0);
+  ASSERT(ny > 0);
+  ASSERT(nz > 0);
+  real_t x_node[nx+1], y_node[ny+1], z_node[nz+1];
+  int dimensions[3];
+  dimensions[0] = nx+1;
+  dimensions[1] = ny+1;
+  dimensions[2] = nz+1;
+  if (bbox != NULL)
+  {
+    real_t dx = (bbox->x2 - bbox->x1) / nx;
+    for (int i = patch->i1; i <= patch->i2; ++i)
+      x_node[i] = bbox->x1 + i*dx;
+    real_t dy = (bbox->y2 - bbox->y1) / ny;
+    for (int j = patch->j1; j <= patch->j2; ++j)
+      y_node[j] = bbox->y1 + j*dy;
+    real_t dz = (bbox->z2 - bbox->z1) / nz;
+    for (int k = patch->k1; k <= patch->k2; ++k)
+      z_node[k] = bbox->z1 + k*dz;
+  }
+  else
+  {
+    real_t dx = 1.0 / nx;
+    for (int i = patch->i1; i <= patch->i2; ++i)
+      x_node[i] = i*dx;
+    real_t dy = 1.0 / ny;
+    for (int j = patch->j1; j <= patch->j2; ++j)
+      y_node[j] = j*dy;
+    real_t dz = 1.0 / nz;
+    for (int k = patch->k1; k <= patch->k2; ++k)
+      z_node[k] = k*dz;
+  }
+  real_t* coords[3];
+  coords[0] = x_node;
+  coords[1] = y_node;
+  coords[2] = z_node;
+
+  // Write the mesh.
+  char patch_mesh_name[FILENAME_MAX];
+  snprintf(patch_mesh_name, FILENAME_MAX-1, "%s_mesh", patch_name);
+  DBPutQuadmesh(dbfile, patch_mesh_name, coord_names, coords, dimensions, 3, 
+                SILO_FLOAT_TYPE, DB_COLLINEAR, NULL);
+
+  // Create bogus variable names.
+  char* var_names[patch->nc];
+  for (int c = 0; c < patch->nc; ++c)
+  {
+    char v[FILENAME_MAX];
+    snprintf(v, FILENAME_MAX-1, "var_%d", c);
+    var_names[c] = string_dup(v);
+  }
+
+  // Write the data.
+  real_t* data[patch->nc];
+  for (int c = 0; c < patch->nc; ++c)
+    data[c] = polymec_malloc(sizeof(real_t) * nx*ny*nz);
+  DECLARE_AMR_PATCH_ARRAY(a, patch);
+  int l = 0;
+  for (int i = patch->i1; i < patch->i2; ++i)
+    for (int j = patch->j1; j < patch->j2; ++j)
+      for (int k = patch->k1; k < patch->k2; ++k, ++l)
+        for (int c = 0; c < patch->nc; ++c)
+          data[c][l] = a[i][j][k][c];
+
+  int cell_dims[3] = {nx, ny, nz};
+  DBPutQuadvar(dbfile, patch_name, patch_mesh_name, patch->nc, 
+               (const char* const *)var_names, data, cell_dims, 
+               3, NULL, 0, SILO_FLOAT_TYPE, DB_ZONECENT, NULL);
+
+  // Clean up.
+  for (int c = 0; c < patch->nc; ++c)
+  {
+    polymec_free(var_names[c]);
+    polymec_free(data[c]);
+  }
+}
+
+void silo_file_write_mapped_amr_patch(silo_file_t* file, 
+                                      const char* patch_name,
+                                      amr_patch_t* patch,
+                                      sp_func_t* mapping)
+{
+  ASSERT(mapping != NULL);
+  ASSERT(sp_func_num_comp(mapping) == 3);
+
+  DBfile* dbfile = silo_file_dbfile(file);
+
+  // Name the coordinate axes.
+  const char* const coord_names[3] = {"x1", "x2", "x3"};
+
+  // Provide coordinates.
+  int n1 = patch->i2 - patch->i1, 
+      n2 = patch->j2 - patch->j1, 
+      n3 = patch->k2 - patch->k1;
+  ASSERT(n1 > 0);
+  ASSERT(n2 > 0);
+  ASSERT(n3 > 0);
+  real_t x1_node[n1+1], x2_node[n2+1], x3_node[n3+1];
+  int dimensions[3];
+  dimensions[0] = n1+1;
+  dimensions[1] = n2+1;
+  dimensions[2] = n3+1;
+
+  real_t dx1 = 1.0 / n1, dx2 = 1.0 / n2, dx3 = 1.0 / n3;
+  point_t x;
+  int l = 0;
+  for (int i = patch->i1; i <= patch->i2; ++i)
+  {
+    x.x = i * dx1;
+    for (int j = patch->j1; j <= patch->j2; ++j)
+    {
+      x.y = j * dx2;
+      for (int k = patch->k1; k <= patch->k2; ++k, ++l)
+      {
+        x.z = k * dx3;
+        real_t y[3];
+        sp_func_eval(mapping, &x, y);
+        x1_node[l] = y[0];
+        x2_node[l] = y[1];
+        x3_node[l] = y[2];
+      }
+    }
+  }
+
+  real_t* coords[3];
+  coords[0] = x1_node;
+  coords[1] = x2_node;
+  coords[2] = x3_node;
+
+  // Write the mesh.
+  char patch_mesh_name[FILENAME_MAX];
+  snprintf(patch_mesh_name, FILENAME_MAX-1, "%s_mesh", patch_name);
+  DBPutQuadmesh(dbfile, patch_mesh_name, coord_names, coords, dimensions, 3, 
+                SILO_FLOAT_TYPE, DB_COLLINEAR, NULL);
+
+  // Create bogus variable names.
+  char* var_names[patch->nc];
+  for (int c = 0; c < patch->nc; ++c)
+  {
+    char v[FILENAME_MAX];
+    snprintf(v, FILENAME_MAX-1, "var_%d", c);
+    var_names[c] = string_dup(v);
+  }
+
+  // Write the data.
+  real_t* data[patch->nc];
+  for (int c = 0; c < patch->nc; ++c)
+    data[c] = polymec_malloc(sizeof(real_t) * n1*n2*n3);
+  DECLARE_AMR_PATCH_ARRAY(a, patch);
+  l = 0;
+  for (int i = patch->i1; i < patch->i2; ++i)
+    for (int j = patch->j1; j < patch->j2; ++j)
+      for (int k = patch->k1; k < patch->k2; ++k, ++l)
+        for (int c = 0; c < patch->nc; ++c)
+          data[c][l] = a[i][j][k][c];
+
+  int cell_dims[3] = {n1, n2, n3};
+  DBPutQuadvar(dbfile, patch_name, patch_mesh_name, patch->nc, 
+               (const char* const *)var_names, patch->data, cell_dims, 
+               3, NULL, 0, SILO_FLOAT_TYPE, DB_ZONECENT, NULL);
+
+  // Clean up.
+  for (int c = 0; c < patch->nc; ++c)
+  {
+    polymec_free(var_names[c]);
+    polymec_free(data[c]);
+  }
+}
 
 void silo_file_write_amr_grid(silo_file_t* file, 
                               const char* grid_name,

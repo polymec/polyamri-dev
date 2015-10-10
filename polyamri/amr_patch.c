@@ -23,6 +23,7 @@ amr_patch_t* amr_patch_new(int ni, int nj, int nk, int nc, int ng)
   p->data = (char*)p + sizeof(amr_patch_t);
   memset(p->data, 0, sizeof(real_t) * storage_size);
   p->nc = nc;
+  p->ng = ng;
   p->i1 = ng;
   p->i2 = ni + ng;
   p->j1 = ng;

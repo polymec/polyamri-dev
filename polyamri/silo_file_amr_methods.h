@@ -11,6 +11,22 @@
 #include "core/silo_file.h"
 #include "polyamri/amr_data_hierarchy.h"
 
+// Writes the given AMR patch to the given Silo file, optionally using 
+// the given bounding box to provide coordinates. If bbox is NULL, 
+// the patch will sit in the space [0,1] x [0,1] x [0,1].
+void silo_file_write_amr_patch(silo_file_t* file, 
+                               const char* patch_name,
+                               amr_patch_t* patch,
+                               bbox_t* bbox);
+
+// Writes the given AMR patch to the given Silo file, using the given
+// spatial function to provide a mapping from [0,1] x [0,1] x [0,1] to 
+// a deformed region of space.
+void silo_file_write_mapped_amr_patch(silo_file_t* file, 
+                                      const char* patch_name,
+                                      amr_patch_t* patch,
+                                      sp_func_t* mapping);
+
 // Writes the given AMR grid to the given Silo file.
 void silo_file_write_amr_grid(silo_file_t* file, 
                               const char* grid_name,
