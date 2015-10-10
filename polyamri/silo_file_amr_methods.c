@@ -11,32 +11,7 @@
 
 // These functions are implemented in polymec/core/silo_file.c, and used 
 // here, even though they are not part of polymec's API.
-
-// Here's the silo_file_t struct, replicated here from the source in 
-// polymec/core/silo_file.c. Note that whenever that source is changed, 
-// we must update it here as well. This logic is tightly coupled to that 
-// in polymec, anyway, so this is a calculated cost.
-struct silo_file_t 
-{
-  // File data.
-  DBfile* dbfile;
-
-  // Metadata.
-  char prefix[FILENAME_MAX], directory[FILENAME_MAX], filename[FILENAME_MAX];
-  int cycle;
-  real_t time;
-  int mode; // Open for reading (DB_READ) or writing (DB_CLOBBER)? 
-  string_ptr_unordered_map_t* expressions;
-
-#if POLYMEC_HAVE_MPI
-  // Stuff for poor man's parallel I/O.
-  PMPIO_baton_t* baton;
-  MPI_Comm comm;
-  int num_files, mpi_tag, nproc, rank, group_rank, rank_in_group;
-  ptr_array_t* multimeshes;
-  ptr_array_t* multivars;
-#endif
-};
+extern DBfile* silo_file_dbfile(silo_file_t* file);
 
 void silo_file_write_amr_grid(silo_file_t* file, 
                               const char* grid_name,
@@ -118,7 +93,8 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
   DBAddOption(options, DBOPT_MRGV_ONAMES, mrgv_onames);
 
   // Deposit the MRG tree into the Silo file.
-  DBPutMrgtree(file->dbfile, "mrgTree", "amr_mesh", tree, options);
+  DBfile* dbfile = silo_file_dbfile(file);
+  DBPutMrgtree(dbfile, "mrgTree", "amr_mesh", tree, options);
   DBFreeMrgtree(tree);
 }
 
