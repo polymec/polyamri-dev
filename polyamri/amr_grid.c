@@ -754,9 +754,9 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
   {
     // Start the process of filling the ghost cells.
     amr_grid_ghost_filler_starter_t* starter = grid->ghost_filler_starters->data[i];
-    amr_patch_t* dest_patch = amr_grid_data_patch(data, starter->i_dest, starter->j_dest, starter->k_dest, NULL);
+    amr_patch_t* dest_patch = amr_grid_data_patch(data, starter->i_dest, starter->j_dest, starter->k_dest);
     ASSERT(dest_patch != NULL);
-    amr_patch_t* src_patch = amr_grid_data_patch(data, starter->i_src, starter->j_src, starter->k_src, NULL);
+    amr_patch_t* src_patch = amr_grid_data_patch(data, starter->i_src, starter->j_src, starter->k_src);
     int token = starter->method(grid, 
                                 dest_patch, 
                                 starter->i_dest, starter->j_dest, starter->k_dest,

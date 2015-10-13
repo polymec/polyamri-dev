@@ -8,7 +8,7 @@
 #ifndef POLYAMRI_AMR_GRID_H
 #define POLYAMRI_AMR_GRID_H
 
-#include "core/point.h"
+#include "core/sp_func.h"
 #include "polyamri/amr_grid_interpolator.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
@@ -53,6 +53,14 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
 
 // Destroys the given grid and all of its patches.
 void amr_grid_free(amr_grid_t* grid);
+
+// Sets a mapping function that will be associated with this AMR grid. If the 
+// mapping function is set to NULL, the grid will not be mapped.
+void amr_grid_set_mapping(amr_grid_t* grid, sp_func_t* mapping);
+
+// Returns the mapping function associated with this AMR grid, or NULL if 
+// no such mapping function exists.
+sp_func_t* amr_grid_mapping(amr_grid_t* grid);
 
 // Sets the given AMR grid as a neighbor of this one. "The neighbor slot" 
 // identifies which of the neighbor "slots" will be occupied by the neighbor
@@ -122,6 +130,10 @@ int amr_grid_num_patches(amr_grid_t* grid);
 
 // Returns the bounding box describing the region represented by this grid.
 bbox_t* amr_grid_domain(amr_grid_t* grid);
+
+// Traverses the grid, returning true and the next (i, j, k) triple if another 
+// triple remains, false otherwise. Set *pos to zero to reset the traversal.
+int amr_grid_next(amr_grid_t* grid, int* pos, int* i, int* j, int* k);
 
 // Returns true if the grid has a local patch at (i, j, k), false if not.
 bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k);
