@@ -19,6 +19,7 @@
 // here, even though they are not part of polymec's API.
 extern DBfile* silo_file_dbfile(silo_file_t* file);
 extern DBoptlist* optlist_from_metadata(silo_field_metadata_t* metadata);
+extern void optlist_free(DBoptlist* optlist);
 extern void silo_file_add_subdomain_mesh(silo_file_t* file, const char* mesh_name, int silo_mesh_type, DBoptlist* optlist);
 extern void silo_file_add_subdomain_field(silo_file_t* file, const char* mesh_name, const char* field_name, int silo_field_type, DBoptlist* optlist);
 
@@ -189,10 +190,10 @@ static void write_amr_patch_data(silo_file_t* file,
         for (int k = patch->k1; k < patch->k2; ++k, ++l)
           for (int c = 0; c < patch->nc; ++c)
             data[l] = a[i][j][k][c];
-    DBoptlist* optlist = optlist_from_metadata(field_metadata[c]);
+    DBoptlist* optlist = (field_metadata != NULL) ? optlist_from_metadata(field_metadata[c]) : NULL;
     DBPutQuadvar1(dbfile, field_component_names[c], patch_grid_name, patch->data,
                   cell_dims, 3, NULL, 0, SILO_FLOAT_TYPE, DB_ZONECENT, optlist);
-//    DBoptlist_free(optlist);
+    optlist_free(optlist);
   }
 
   // Clean up.
@@ -227,15 +228,15 @@ void silo_file_write_amr_grid(silo_file_t* file,
   // This grid is really just a grouping of patches, as far as SILO is 
   // concerned.
   DBSetDir(dbfile, "/");
-  int num_patches = amr_grid_num_patches(grid);
-  char** patch_names = polymec_malloc(sizeof(char*) * num_patches);
-  int patch_types[num_patches];
+  int num_local_patches = amr_grid_num_local_patches(grid);
+  char** patch_names = polymec_malloc(sizeof(char*) * num_local_patches);
+  int patch_types[num_local_patches];
   int pos = 0, i, j, k, l = 0;
   int npx, npy, npz, nx, ny, nz, ng;
   amr_grid_get_extents(grid, &npx, &npy, &npz);
   amr_grid_get_patch_size(grid, &nx, &ny, &nz, &ng);
   sp_func_t* mapping = amr_grid_mapping(grid);
-  while (amr_grid_next(grid, &pos, &i, &j, &k)) 
+  while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k)) 
   {
     // Write out the grid for the patch itself.
     int i1 = i*npx, i2 = i*npx + nx, j1 = j*npy, j2 = j*npy + ny, k1 = k*npz, k2 = k*npz + nz;
@@ -246,13 +247,13 @@ void silo_file_write_amr_grid(silo_file_t* file,
     // Name the thing and set its type.
     patch_types[i] = DB_QUAD_RECT;
   }
-  ASSERT(l == num_patches);
+  ASSERT(l == num_local_patches);
 
   // Group all the patches together.
-  DBPutMultimesh(dbfile, grid_name, num_patches, (const char* const*)patch_names, patch_types, NULL);
+  DBPutMultimesh(dbfile, grid_name, num_local_patches, (const char* const*)patch_names, patch_types, NULL);
 
   // Clean up.
-  for (int p = 0; p < num_patches; ++p)
+  for (int p = 0; p < num_local_patches; ++p)
     polymec_free(patch_names[p]);
   polymec_free(patch_names);
 
@@ -274,10 +275,10 @@ void silo_file_write_amr_grid_data(silo_file_t* file,
                                    amr_grid_data_t* grid_data,
                                    silo_field_metadata_t** field_metadata)
 {
-  int num_patches = amr_grid_data_num_patches(grid_data);
+  int num_local_patches = amr_grid_data_num_local_patches(grid_data);
   int num_components = amr_grid_data_num_components(grid_data);
   char field_names[num_components][FILENAME_MAX];
-  int field_types[num_patches];
+  int field_types[num_local_patches];
   amr_patch_t* patch;
   int pos = 0, i, j, k, l = 0;
   while (amr_grid_data_next(grid_data, &pos, &i, &j, &k, &patch))
@@ -291,13 +292,13 @@ void silo_file_write_amr_grid_data(silo_file_t* file,
     field_types[l] = DB_QUADVAR;
     ++l;
   }
-  ASSERT(l == num_patches);
+  ASSERT(l == num_local_patches);
 
   // Finally, place multi-* entries into the Silo file.
   DBfile* dbfile = silo_file_dbfile(file);
   for (int c = 0; c < num_components; ++c)
   {
-    DBPutMultivar(dbfile, field_component_names[c], num_patches, (const char* const*)field_names[c], field_types, NULL);
+    DBPutMultivar(dbfile, field_component_names[c], num_local_patches, (const char* const*)field_names[c], field_types, NULL);
 
     // Add subdomain information for this component.
     silo_file_add_subdomain_mesh(file, field_component_names[c], DB_QUAD_RECT, NULL);
@@ -332,7 +333,7 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
   DBSetCwr(tree, "levels");
 
   // Define each AMR refinement level in the tree.
-  int num_patches = 0;
+  int num_local_patches = 0;
   {
     const char* level_maps_name = "mesh_level_maps";
     char* level_region_names[1];
@@ -345,8 +346,8 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
     {
       seg_ids[i] = i;
       seg_types[i] = DB_BLOCKCENT;
-      num_level_patches[i] = amr_grid_data_num_patches(grid_data);
-      num_patches += num_level_patches[i];
+      num_level_patches[i] = amr_grid_data_num_local_patches(grid_data);
+      num_local_patches += num_level_patches[i];
       ++i;
     }
     level_region_names[0] = "@level%d@n";
@@ -356,7 +357,7 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
   DBSetCwr(tree, "..");
 
   // Now define the patches.
-  DBAddRegion(tree, "patches", 0, num_patches, NULL, 0, NULL, NULL, NULL, NULL); 
+  DBAddRegion(tree, "patches", 0, num_local_patches, NULL, 0, NULL, NULL, NULL, NULL); 
   DBSetCwr(tree, "patches");
 
   // FIXME: Fancy things go here.

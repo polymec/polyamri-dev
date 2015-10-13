@@ -10,7 +10,7 @@
 struct amr_grid_data_t
 {
   amr_grid_t* grid;
-  int nx, ny, nz;
+  int nx, ny, nz, nc;
   void* patches;
 };
 
@@ -23,59 +23,44 @@ amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, int num_components)
   ASSERT(num_components > 0);
 
   // Allocate storage.
-  int num_patches = amr_grid_num_patches(grid);
-  size_t patches_size = sizeof(amr_patch_t*) * num_patches;
+  int num_local_patches = amr_grid_num_local_patches(grid);
+  size_t patches_size = sizeof(amr_patch_t*) * num_local_patches;
   size_t grid_data_size = sizeof(amr_grid_data_t) + patches_size;
   amr_grid_data_t* grid_data = polymec_malloc(grid_data_size);
   grid_data->grid = grid;
+  grid_data->nc = num_components;
   amr_grid_get_extents(grid, &grid_data->nx, &grid_data->ny, &grid_data->nz);
   grid_data->patches = (char*)grid_data + sizeof(amr_grid_data_t);
   memset(grid_data->patches, 0, patches_size);
 
   // Now populate the patches.
-  bbox_t* domain = amr_grid_domain(grid);
   int px, py, pz, ng;
   amr_grid_get_patch_size(grid, &px, &py, &pz, &ng);
   DECLARE_PATCH_ARRAY(patches, grid_data);
-  real_t dx = (domain->x2 - domain->x1) / grid_data->nx;
-  real_t dy = (domain->y2 - domain->y1) / grid_data->ny;
-  real_t dz = (domain->z2 - domain->z1) / grid_data->nz;
-  for (int i = 0; i < grid_data->nx; ++i)
-  {
-    for (int j = 0; j < grid_data->ny; ++j)
-    {
-      for (int k = 0; k < grid_data->nz; ++k)
-      {
-        if (amr_grid_has_patch(grid, i, j, k))
-          patches[i][j][k] = amr_patch_new(px, py, pz, num_components, ng);
-      }
-    }
-  }
-
+  int pos = 0, i, j, k;
+  while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+    patches[i][j][k] = amr_patch_new(px, py, pz, num_components, ng);
 
   return grid_data;
 }
 
 void amr_grid_data_free(amr_grid_data_t* grid_data)
 {
-  DECLARE_PATCH_ARRAY(patches, grid_data);
-  for (int i = 0; i < grid_data->nx; ++i)
-  {
-    for (int j = 0; j < grid_data->ny; ++j)
-    {
-      for (int k = 0; i < grid_data->nz; ++k)
-      {
-        if (patches[i][j][k] != NULL)
-          amr_patch_free(patches[i][j][k]);
-      }
-    }
-  }
+  int pos = 0, i, j, k;
+  amr_patch_t* patch;
+  while (amr_grid_data_next(grid_data, &pos, &i, &j, &k, &patch))
+    amr_patch_free(patch);
   polymec_free(grid_data);
 }
 
-int amr_grid_data_num_patches(amr_grid_data_t* grid_data)
+int amr_grid_data_num_components(amr_grid_data_t* grid_data)
 {
-  return amr_grid_num_patches(grid_data->grid);
+  return grid_data->nc;
+}
+
+int amr_grid_data_num_local_patches(amr_grid_data_t* grid_data)
+{
+  return amr_grid_num_local_patches(grid_data->grid);
 }
 
 amr_grid_t* amr_grid_data_grid(amr_grid_data_t* grid_data)
@@ -93,17 +78,13 @@ bool amr_grid_data_next(amr_grid_data_t* grid_data, int* pos,
                         int* i, int* j, int* k, 
                         amr_patch_t** patch)
 {
-  int index = *pos;
-  int num_patches = amr_grid_num_patches(grid_data->grid);
-  amr_patch_t** patches = grid_data->patches;
-  if (index < num_patches)
+  bool result = amr_grid_next_local_patch(grid_data->grid, pos, i, j, k);
+  if (result)
   {
-    *patch = patches[index];
-    while ((patches[index] == NULL) && (index < num_patches))
-      ++(*pos);
-    return true;
+    DECLARE_PATCH_ARRAY(patches, grid_data);
+    *patch = patches[*i][*j][*k];
   }
-  return false;
+  return result;
 }
 
 void amr_grid_data_fill_ghosts(amr_grid_data_t* grid_data)

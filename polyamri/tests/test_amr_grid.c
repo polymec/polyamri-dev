@@ -14,9 +14,8 @@
 
 void test_ctor(void** state) 
 {
-  bbox_t bbox = {.x1 = 0.0, .x2 = 1.0, .y1 = 0.0, .y2 = 1.0, .z1 = 0.0, .z2 = 1.0};
-  amr_grid_t* level = amr_grid_new(&bbox, 4, 4, 4, 16, 16, 16, 1, false, false, false);
-  assert_int_equal(0, amr_grid_num_patches(level));
+  amr_grid_t* level = amr_grid_new(4, 4, 4, 16, 16, 16, 1, false, false, false);
+  assert_int_equal(0, amr_grid_num_local_patches(level));
 //  amr_grid_fill_ghosts(level, patches); // Should do nothing.
   amr_grid_free(level);
 }
@@ -24,13 +23,12 @@ void test_ctor(void** state)
 static void test_fill_ghosts(void** state)
 { 
   // Set up a 4 x 4 x 4 array of patches in a grid level and fill ghost values.
-  bbox_t bbox = {.x1 = 0.0, .x2 = 1.0, .y1 = 0.0, .y2 = 1.0, .z1 = 0.0, .z2 = 1.0};
-  amr_grid_t* level = amr_grid_new(&bbox, 4, 4, 4, 16, 16, 16, 1, true, true, true);
+  amr_grid_t* level = amr_grid_new(4, 4, 4, 16, 16, 16, 1, true, true, true);
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)
         amr_grid_add_local_patch(level, i, j, k);
-  assert_int_equal(4*4*4, amr_grid_num_patches(level));
+  assert_int_equal(4*4*4, amr_grid_num_local_patches(level));
 
 #if 0
   // Make a patch set on this grid level.

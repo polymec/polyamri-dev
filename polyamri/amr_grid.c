@@ -47,16 +47,30 @@ typedef struct
 
 struct amr_grid_t
 {
-  bbox_t domain;
-  int nx, ny, nz, px, py, pz, ng, num_patches;
+  // Intrinsic metadata.
+  int nx, ny, nz, px, py, pz, ng; 
+  bool x_periodic, y_periodic, z_periodic;
+  
+  // Information about which patches are present.
+  int num_local_patches;
+  int* local_patch_indices;
   patch_type_t* patch_types;
   int* remote_owners;
-  bool x_periodic, y_periodic, z_periodic;
 
-  // Relationships with other grids.
-  int ref_ratio;
+  // Mapping function.
+  sp_func_t* mapping;
+
+  // Associated properties.
+  string_ptr_unordered_map_t* properties;
+
+  // Ratio of refinement between this grid and its "neighbors"
+  int ref_ratio; 
+
+  // Coarser grid and associated interpolator.
   amr_grid_t* coarser;
   amr_grid_interpolator_t* coarse_interpolator;
+
+  // Finer grid and associated interpolator.
   amr_grid_t* finer;
   amr_grid_interpolator_t* fine_interpolator;
 
@@ -64,19 +78,15 @@ struct amr_grid_t
   amr_grid_t* neighbors[6];
   amr_grid_interpolator_t* neighbor_interpolators[6];
 
-  // Associated properties.
-  string_ptr_unordered_map_t* properties;
-
   // Ghost filling machinery -- asynchronous!
   ptr_array_t* ghost_filler_starters;
   ptr_array_t* ghost_filler_finishers;
 
-  // Finalized?
+  // This flag is set by amr_grid_finalize() after a grid has been assembled.
   bool finalized;
 };
 
-amr_grid_t* amr_grid_new(bbox_t* domain, 
-                         int nx, int ny, int nz, 
+amr_grid_t* amr_grid_new(int nx, int ny, int nz, 
                          int px, int py, int pz, 
                          int num_ghosts, 
                          bool periodic_in_x, 
@@ -95,7 +105,6 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   ASSERT(num_ghosts <= pz);
 
   amr_grid_t* grid = polymec_malloc(sizeof(amr_grid_t));
-  grid->domain = *domain;
   grid->nx = nx;
   grid->ny = ny;
   grid->nz = nz;
@@ -103,7 +112,8 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
   grid->py = py;
   grid->pz = pz;
   grid->ng = num_ghosts;
-  grid->num_patches = 0;
+  grid->num_local_patches = 0;
+  grid->local_patch_indices = NULL;
   grid->x_periodic = periodic_in_x;
   grid->y_periodic = periodic_in_y;
   grid->z_periodic = periodic_in_z;
@@ -151,7 +161,20 @@ void amr_grid_free(amr_grid_t* grid)
   string_ptr_unordered_map_free(grid->properties);
   ptr_array_free(grid->ghost_filler_starters);
   ptr_array_free(grid->ghost_filler_finishers);
+  if (grid->local_patch_indices != NULL)
+    polymec_free(grid->local_patch_indices);
   polymec_free(grid);
+}
+
+void amr_grid_set_mapping(amr_grid_t* grid, sp_func_t* mapping)
+{
+  ASSERT((mapping == NULL) || (sp_func_num_comp(mapping) == 3));
+  grid->mapping = mapping;
+}
+
+sp_func_t* amr_grid_mapping(amr_grid_t* grid)
+{
+  return grid->mapping;
 }
 
 void amr_grid_set_neighbor(amr_grid_t* grid, 
@@ -192,6 +215,7 @@ void amr_grid_associate_finer(amr_grid_t* grid,
                               int ref_ratio,
                               amr_grid_interpolator_t* interpolator)
 {
+  ASSERT(!grid->finalized);
   ASSERT(ref_ratio > 0);
   ASSERT((grid->ref_ratio == 0) || (grid->ref_ratio == ref_ratio));
 
@@ -207,6 +231,7 @@ void amr_grid_associate_coarser(amr_grid_t* grid,
                                 int ref_ratio,
                                 amr_grid_interpolator_t* interpolator)
 {
+  ASSERT(!grid->finalized);
   ASSERT(ref_ratio > 0);
   ASSERT((grid->ref_ratio == 0) || (grid->ref_ratio == ref_ratio));
 
@@ -219,21 +244,22 @@ void amr_grid_associate_coarser(amr_grid_t* grid,
 
 void amr_grid_add_local_patch(amr_grid_t* grid, int i, int j, int k)
 {
+  ASSERT(!grid->finalized);
   int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
   patch_type_t patch_type = grid->patch_types[patch_index];
   ASSERT(patch_type == NO_PATCH);
   grid->patch_types[patch_index] = LOCAL_SAME_LEVEL;
-  ++(grid->num_patches);
+  ++(grid->num_local_patches);
 }
 
 void amr_grid_add_remote_patch(amr_grid_t* grid, int i, int j, int k, int remote_owner)
 {
+  ASSERT(!grid->finalized);
   int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
   patch_type_t patch_type = grid->patch_types[patch_index];
   ASSERT(patch_type == NO_PATCH);
   grid->patch_types[patch_index] = REMOTE_SAME_LEVEL;
   grid->remote_owners[patch_index] = remote_owner;
-  ++(grid->num_patches);
 }
 
 void amr_grid_finalize(amr_grid_t* grid)
@@ -244,15 +270,34 @@ void amr_grid_finalize(amr_grid_t* grid)
 
   // Make sure that we have accounted for all patches in our construction 
   // process.
+  if (grid->num_local_patches < (grid->nx * grid->ny * grid->nz))
+  {
+    for (int i = 0; i < grid->nx; ++i)
+    {
+      for (int j = 0; j < grid->ny; ++j)
+      {
+        for (int k = 0; k < grid->nz; ++k)
+        {
+          int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
+          if (grid->patch_types[patch_index] == NO_PATCH)
+            polymec_error("amr_grid_finalize: no local or remote patch at (%d, %d, %d).", i, j, k);
+        }
+      }
+    }
+  }
+
+  // Make an array of indices for locally-present patches.
+  grid->local_patch_indices = polymec_malloc(sizeof(int) * 3 * grid->num_local_patches);
+  int l = 0;
   for (int i = 0; i < grid->nx; ++i)
   {
     for (int j = 0; j < grid->ny; ++j)
     {
-      for (int k = 0; k < grid->nz; ++k)
+      for (int k = 0; k < grid->nz; ++k, ++l)
       {
-        int patch_index = grid->nz*grid->ny*i + grid->nz*j + k;
-        if (grid->patch_types[patch_index] == NO_PATCH)
-          polymec_error("amr_grid_finalize: no local or remote patch at (%d, %d, %d).", i, j, k);
+        grid->local_patch_indices[3*l]   = i;
+        grid->local_patch_indices[3*l+1] = j;
+        grid->local_patch_indices[3*l+2] = k;
       }
     }
   }
@@ -305,9 +350,20 @@ void amr_grid_finalize(amr_grid_t* grid)
   grid->finalized = true;
 }
 
-bbox_t* amr_grid_domain(amr_grid_t* grid)
+bool amr_grid_next_local_patch(amr_grid_t* grid, int* pos, int* i, int* j, int* k)
 {
-  return &grid->domain;
+  ASSERT(grid->finalized);
+  ASSERT(*pos >= 0);
+  if (*pos < grid->num_local_patches)
+  {
+    int l = *pos;
+    *i = grid->local_patch_indices[3*l];
+    *j = grid->local_patch_indices[3*l+1];
+    *k = grid->local_patch_indices[3*l+2];
+    ++(*pos);
+  }
+  else
+    return false;
 }
 
 void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity)
@@ -325,17 +381,17 @@ void amr_grid_get_extents(amr_grid_t* grid, int* nx, int* ny, int* nz)
   *nz = grid->nz;
 }
 
-void amr_grid_get_patch_size(amr_grid_t* grid, int* px, int* py, int* pz, int* ng)
+void amr_grid_get_patch_size(amr_grid_t* grid, int* pnx, int* pny, int* pnz, int* png)
 {
-  *px = grid->px;
-  *py = grid->py;
-  *pz = grid->pz;
-  *ng = grid->ng;
+  *pnx = grid->px;
+  *pny = grid->py;
+  *pnz = grid->pz;
+  *png = grid->ng;
 }
 
-int amr_grid_num_patches(amr_grid_t* grid)
+int amr_grid_num_local_patches(amr_grid_t* grid)
 {
-  return grid->num_patches;
+  return grid->num_local_patches;
 }
 
 static inline patch_type_t get_patch_type(amr_grid_t* grid, int i, int j, int k)

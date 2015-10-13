@@ -16,13 +16,11 @@
 // coarsest.
 typedef struct amr_grid_hierarchy_t amr_grid_hierarchy_t;
 
-// Creates a new empty grid hierarchy on the domain defined by the given 
-// bounding box, with the given number of ghost cells in each tile, the 
-// (integer power of 2) refinement ratio between levels, and the given 
-// periodicity. The coarsest grid level, when added, will have nx x ny x nz 
-// tiles of dimension px x py x pz, 
-amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain, 
-                                             int nx, int ny, int nz, 
+// Creates a new empty grid hierarchy on [0,1]x[0,1]x[0,1] with the given 
+// number of ghost cells in each tile, the (integer power of 2) refinement 
+// ratio between levels, and the given periodicity. The coarsest grid level, 
+// when added, will have nx x ny x nz tiles of dimension px x py x pz, 
+amr_grid_hierarchy_t* amr_grid_hierarchy_new(int nx, int ny, int nz, 
                                              int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
@@ -30,9 +28,6 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain,
 
 // Destroys the given grid hierarchy and all of its levels.
 void amr_grid_hierarchy_free(amr_grid_hierarchy_t* hierarchy);
-
-// Returns the bounding box defining the domain of this hierarchy.
-bbox_t* amr_grid_hierarchy_domain(amr_grid_hierarchy_t* hierarchy);
 
 // Returns the current number of grid levels.
 int amr_grid_hierarchy_num_levels(amr_grid_hierarchy_t* hierarchy);

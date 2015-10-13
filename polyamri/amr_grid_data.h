@@ -26,8 +26,8 @@ void amr_grid_data_free(amr_grid_data_t* grid_data);
 // Returns the number of data components in the amr_grid_data object.
 int amr_grid_data_num_components(amr_grid_data_t* grid_data);
 
-// Returns the number of (local) patches in the amr_grid_data object.
-int amr_grid_data_num_patches(amr_grid_data_t* grid_data);
+// Returns the number of local patches in the amr_grid_data object.
+int amr_grid_data_num_local_patches(amr_grid_data_t* grid_data);
 
 // Returns an internal pointer to the given object's underlying amr_grid.
 amr_grid_t* amr_grid_data_grid(amr_grid_data_t* grid_data);

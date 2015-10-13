@@ -21,12 +21,13 @@ void test_write_amr_patch(void** state)
       for (int k = patch->k1; k < patch->k2; ++k)
         for (int l = 0; l < 4; ++l)
           a[i][j][k][l] = (real_t)(10*10*4*i + 10*4*j + 4*k + l);
+  const char* field = "solution";
   silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, "test_silo_file_amr_methods", "test_write_amr_patch", 1, 0, 0, 0.0);
-  silo_file_write_amr_patch(silo, "patch_without_bbox", patch, NULL);
+  silo_file_write_amr_patch(silo, &field, "patch_without_bbox", patch, NULL);
   bbox_t bbox = {.x1 = -50.0, .x2 = 50.0,
                  .y1 = -25.0, .y2 = 25.0,
                  .z1 = -12.5, .z2 = 12.5};
-  silo_file_write_amr_patch(silo, "patch_with_bbox", patch, &bbox);
+  silo_file_write_amr_patch(silo, &field, "patch_with_bbox", patch, &bbox);
 //  sp_func_t* mapping = 
 //  silo_file_write_mapped_amr_patch(silo, "mapped_patch", patch, mapping);
   silo_file_close(silo);

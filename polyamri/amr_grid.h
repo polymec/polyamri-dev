@@ -40,11 +40,10 @@ typedef enum
 // constructed.
 //------------------------------------------------------------------------
 
-// Creates a new empty grid level defined on the region filling the given 
-// bounding box, with nx x ny x nz patches of size px x py x pz. Each patch has 
-// the given number of ghost cells. This grid is not associated with any other grids.
-amr_grid_t* amr_grid_new(bbox_t* domain, 
-                         int nx, int ny, int nz, 
+// Creates a new empty grid level defined on the region filling [0,1]x[0,1]x[0,1]
+// with nx x ny x nz patches of size px x py x pz. Each patch has the given 
+// number of ghost cells. This grid is not associated with any other grids.
+amr_grid_t* amr_grid_new(int nx, int ny, int nz, 
                          int px, int py, int pz,
                          int num_ghosts,
                          bool periodic_in_x, 
@@ -54,8 +53,10 @@ amr_grid_t* amr_grid_new(bbox_t* domain,
 // Destroys the given grid and all of its patches.
 void amr_grid_free(amr_grid_t* grid);
 
-// Sets a mapping function that will be associated with this AMR grid. If the 
-// mapping function is set to NULL, the grid will not be mapped.
+// Sets a mapping function that will be associated with this AMR grid. A mapping 
+// function is a 3-component function that maps points in [0,1]x[0,1]x[0,1] to 
+// another logically-rectangular domain. If the mapping function is set to 
+// NULL, the grid will not be mapped.
 void amr_grid_set_mapping(amr_grid_t* grid, sp_func_t* mapping);
 
 // Returns the mapping function associated with this AMR grid, or NULL if 
@@ -121,19 +122,20 @@ void amr_grid_finalize(amr_grid_t* grid);
 void amr_grid_get_extents(amr_grid_t* grid, int* nx, int* ny, int* nz);
 
 // Fetches the number of cells in each patch on this grid in the x, y, and z 
-// directions, placing them in px, py, pz. Additionally, the number of ghost 
-// cells is placed in ng.
-void amr_grid_get_patch_size(amr_grid_t* grid, int* px, int* py, int* pz, int* ng);
+// directions, placing them in pnx, pny, pnz. Additionally, the number of ghost 
+// cells is placed in png.
+void amr_grid_get_patch_size(amr_grid_t* grid, int* pnx, int* pny, int* pnz, int* png);
 
-// Returns the number of patches that can be stored on this grid.
-int amr_grid_num_patches(amr_grid_t* grid);
+// Returns the number of patches that can be stored locally on this grid.
+int amr_grid_num_local_patches(amr_grid_t* grid);
 
 // Returns the bounding box describing the region represented by this grid.
 bbox_t* amr_grid_domain(amr_grid_t* grid);
 
-// Traverses the grid, returning true and the next (i, j, k) triple if another 
-// triple remains, false otherwise. Set *pos to zero to reset the traversal.
-int amr_grid_next(amr_grid_t* grid, int* pos, int* i, int* j, int* k);
+// Traverses the locally-present patches in the grid, returning true and the 
+// next (i, j, k) triple if the traversal is incomplete, false otherwise. 
+// Set *pos to zero to reset the traversal.
+bool amr_grid_next_local_patch(amr_grid_t* grid, int* pos, int* i, int* j, int* k);
 
 // Returns true if the grid has a local patch at (i, j, k), false if not.
 bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k);

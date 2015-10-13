@@ -10,7 +10,6 @@
 
 struct amr_grid_hierarchy_t 
 {
-  bbox_t domain;
   int nx, ny, nz, px, py, pz;
   int num_ghosts, ref_ratio;
   bool x_periodic, y_periodic, z_periodic;
@@ -18,16 +17,12 @@ struct amr_grid_hierarchy_t
   ptr_array_t* levels;
 };
 
-amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain, 
-                                             int nx, int ny, int nz, 
+amr_grid_hierarchy_t* amr_grid_hierarchy_new(int nx, int ny, int nz, 
                                              int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
                                              amr_grid_interpolator_t* interpolator)
 {
-  ASSERT(domain->x2 > domain->x1);
-  ASSERT(domain->y2 > domain->y1);
-  ASSERT(domain->z2 > domain->z1);
   ASSERT(nx > 0);
   ASSERT(ny > 0);
   ASSERT(nz > 0);
@@ -38,7 +33,6 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(bbox_t* domain,
   ASSERT((ref_ratio % 2) == 0); // FIXME: Not good enough!
 
   amr_grid_hierarchy_t* hierarchy = malloc(sizeof(amr_grid_hierarchy_t));
-  hierarchy->domain = *domain;
   hierarchy->nx = nx, hierarchy->ny = ny, hierarchy->nz = nz;
   hierarchy->px = px, hierarchy->py = py, hierarchy->pz = pz;
   hierarchy->num_ghosts = num_ghosts;
@@ -55,11 +49,6 @@ void amr_grid_hierarchy_free(amr_grid_hierarchy_t* hierarchy)
 {
   ptr_array_free(hierarchy->levels);
   free(hierarchy);
-}
-
-bbox_t* amr_grid_hierarchy_domain(amr_grid_hierarchy_t* hierarchy)
-{
-  return &hierarchy->domain;
 }
 
 int amr_grid_hierarchy_num_levels(amr_grid_hierarchy_t* hierarchy)
@@ -98,7 +87,7 @@ amr_grid_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
     ny *= ref_ratio;
     nz *= ref_ratio;
   }
-  amr_grid_t* new_level = amr_grid_new(&hierarchy->domain, nx, ny, nz,
+  amr_grid_t* new_level = amr_grid_new(nx, ny, nz,
                                        px, py, pz, hierarchy->num_ghosts,
                                        hierarchy->x_periodic, 
                                        hierarchy->y_periodic, 
