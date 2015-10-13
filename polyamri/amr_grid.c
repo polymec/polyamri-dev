@@ -354,7 +354,8 @@ bool amr_grid_next_local_patch(amr_grid_t* grid, int* pos, int* i, int* j, int* 
 {
   ASSERT(grid->finalized);
   ASSERT(*pos >= 0);
-  if (*pos < grid->num_local_patches)
+  bool result = (*pos < grid->num_local_patches);
+  if (result)
   {
     int l = *pos;
     *i = grid->local_patch_indices[3*l];
@@ -362,8 +363,7 @@ bool amr_grid_next_local_patch(amr_grid_t* grid, int* pos, int* i, int* j, int* 
     *k = grid->local_patch_indices[3*l+2];
     ++(*pos);
   }
-  else
-    return false;
+  return result;
 }
 
 void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity)
