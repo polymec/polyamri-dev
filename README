@@ -3,5 +3,5 @@ the Polymec library that adds features for easily creating applications that
 use finite volume methods on adaptively refined block-structured grids. See 
 the INSTALL file for details on installation.
 
-Like that in polymec library, the source code in polyamri falls under the 
+Like that in Polymec, the source code in Polyamri falls under the 
 Mozilla Public License v2.0. Please see the LICENSE file for details.
