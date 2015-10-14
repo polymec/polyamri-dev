@@ -30,7 +30,7 @@ void silo_file_write_mapped_amr_patch(silo_file_t* file,
                                       const char** field_component_names,
                                       const char* patch_name,
                                       amr_patch_t* patch,
-                                      sp_func_t* mapping);
+                                      coord_mapping_t* mapping);
 
 // Returns true if the Silo file contains an AMR patch with the given name, 
 // false if not. 

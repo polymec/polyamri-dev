@@ -8,7 +8,7 @@
 #ifndef POLYAMRI_AMR_GRID_H
 #define POLYAMRI_AMR_GRID_H
 
-#include "core/sp_func.h"
+#include "geometry/coord_mapping.h"
 #include "polyamri/amr_grid_interpolator.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
@@ -53,15 +53,15 @@ amr_grid_t* amr_grid_new(int nx, int ny, int nz,
 // Destroys the given grid and all of its patches.
 void amr_grid_free(amr_grid_t* grid);
 
-// Sets a mapping function that will be associated with this AMR grid. A mapping 
-// function is a 3-component function that maps points in [0,1]x[0,1]x[0,1] to 
-// another logically-rectangular domain. If the mapping function is set to 
-// NULL, the grid will not be mapped.
-void amr_grid_set_mapping(amr_grid_t* grid, sp_func_t* mapping);
+// Sets a coordinate mapping that will be associated with this AMR grid. 
+// This coordinate mapping maps points in [0,1]x[0,1]x[0,1] to points in 
+// another logically-rectangular domain. If the mapping is NULL, the grid 
+// will not be mapped.
+void amr_grid_set_mapping(amr_grid_t* grid, coord_mapping_t* mapping);
 
 // Returns the mapping function associated with this AMR grid, or NULL if 
 // no such mapping function exists.
-sp_func_t* amr_grid_mapping(amr_grid_t* grid);
+coord_mapping_t* amr_grid_mapping(amr_grid_t* grid);
 
 // Sets the given AMR grid as a neighbor of this one. "The neighbor slot" 
 // identifies which of the neighbor "slots" will be occupied by the neighbor

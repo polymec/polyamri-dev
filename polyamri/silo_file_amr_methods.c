@@ -97,15 +97,14 @@ void silo_file_write_amr_patch(silo_file_t* file,
 
 static void write_amr_patch_grid(silo_file_t* file,
                                  const char* patch_grid_name,
-                                 int N1, int N2, int N3,
-                                 int i1, int i2, int j1, int j2, int k1, int k2,
-                                 sp_func_t* mapping,
+                                 int N1, int N2, int N3, // index dimensions of containing space, if any
+                                 int i1, int i2, int j1, int j2, int k1, int k2, // bounds of patch grid
+                                 coord_mapping_t* mapping,
                                  bool hide_from_gui)
 {
   ASSERT(i2 > i1);
   ASSERT(j2 > j1);
   ASSERT(k2 > k1);
-  ASSERT((mapping == NULL) || (sp_func_num_comp(mapping) == 3));
 
   DBfile* dbfile = silo_file_dbfile(file);
 
@@ -135,11 +134,11 @@ static void write_amr_patch_grid(silo_file_t* file,
         for (int k = k1; k <= k2; ++k, ++l)
         {
           x.z = k * dx3;
-          real_t y[3];
-          sp_func_eval(mapping, &x, y);
-          x1_node[l] = y[0];
-          x2_node[l] = y[1];
-          x3_node[l] = y[2];
+          point_t y;
+          coord_mapping_map_point(mapping, &x, &y);
+          x1_node[l] = y.x;
+          x2_node[l] = y.y;
+          x3_node[l] = y.z;
         }
       }
     }
@@ -180,7 +179,9 @@ static void write_amr_patch_grid(silo_file_t* file,
 static void write_amr_patch_data(silo_file_t* file,
                                  const char** field_component_names,
                                  const char* patch_grid_name,
+                                 int N1, int N2, int N3, // index dimensions of containing space, if any
                                  amr_patch_t* patch,
+                                 coord_mapping_t* mapping,
                                  silo_field_metadata_t** field_metadata,
                                  bool hide_from_gui)
 {
@@ -191,6 +192,30 @@ static void write_amr_patch_data(silo_file_t* file,
   DBfile* dbfile = silo_file_dbfile(file);
   int one = 1;
 
+  // If we're mapped and there are vector fields, we need to treat them specially.
+  int num_vector_components = 0;
+  bool is_vector_component[patch->nc];
+  int first_vector_component = -1;
+  if ((mapping != NULL) && (field_metadata != NULL))
+  {
+    for (int c = 0; c < patch->nc; ++c)
+    {
+      if ((field_metadata[c] != NULL) && silo_field_metadata_is_vector_component(field_metadata[c]))
+      {
+        if ((num_vector_components % 3) == 0)
+        {
+          ASSERT(patch->nc >= c + 3); // If you start a vector, you better finish your vector.
+          first_vector_component = c;
+        }
+        is_vector_component[c] = true;
+        ++num_vector_components;
+      }
+    }
+  }
+  else
+    memset(is_vector_component, 0, sizeof(bool) * patch->nc);
+  ASSERT((num_vector_components % 3) == 0); // We should have complete sets of vector triples.
+
   // Write the data.
   int n1 = patch->i2 - patch->i1;
   int n2 = patch->j2 - patch->j1;
@@ -200,12 +225,6 @@ static void write_amr_patch_data(silo_file_t* file,
   DECLARE_AMR_PATCH_ARRAY(a, patch);
   for (int c = 0; c < patch->nc; ++c)
   {
-    int l = 0;
-    for (int i = patch->i1; i < patch->i2; ++i)
-      for (int j = patch->j1; j < patch->j2; ++j)
-        for (int k = patch->k1; k < patch->k2; ++k, ++l)
-          for (int c = 0; c < patch->nc; ++c)
-            data[l] = a[i][j][k][c];
     DBoptlist* optlist = (field_metadata != NULL) ? optlist_from_metadata(field_metadata[c]) : NULL;
     if (hide_from_gui)
     {
@@ -213,7 +232,46 @@ static void write_amr_patch_data(silo_file_t* file,
         optlist = DBMakeOptlist(1); 
       DBAddOption(optlist, DBOPT_HIDE_FROM_GUI, &one);
     }
-    DBPutQuadvar1(dbfile, field_component_names[c], patch_grid_name, patch->data,
+    if ((mapping != NULL) && is_vector_component[c])
+    {
+      // We need to map this vector field before we write it out.
+      int c1 = first_vector_component, c2 = first_vector_component+1, c3 = first_vector_component+2;
+      int which_component = c - c1;
+      int l = 0;
+      point_t x;
+      real_t dx = 1.0 / N1, dy = 1.0 / N2, dz = 1.0 / N3;
+      for (int i = 0; i < n1; ++i)
+      {
+        x.x = (i+patch->i1) * dx;
+        for (int j = 0; j < n2; ++j)
+        {
+          x.y = (j+patch->j1) * dy;
+          for (int k = 0; k < n3; ++k, ++l)
+          {
+            x.z = (k+patch->k1) * dz;
+            vector_t v = {.x = a[i][j][k][c1], a[i][j][k][c2], a[i][j][k][c3]};
+            vector_t v1;
+            coord_mapping_map_vector(mapping, &x, &v, &v1);
+            switch (which_component)
+            {
+              case 0: data[l] = v1.x; break;
+              case 1: data[l] = v1.y; break;
+              default: data[l] = v1.z;
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      // Copy the field data verbatim.
+      int l = 0;
+      for (int i = patch->i1; i < patch->i2; ++i)
+        for (int j = patch->j1; j < patch->j2; ++j)
+          for (int k = patch->k1; k < patch->k2; ++k, ++l)
+            data[l] = a[i][j][k][c];
+    }
+    DBPutQuadvar1(dbfile, field_component_names[c], patch_grid_name, data,
                   cell_dims, 3, NULL, 0, SILO_FLOAT_TYPE, DB_ZONECENT, optlist);
     optlist_free(optlist);
   }
@@ -226,12 +284,13 @@ void silo_file_write_mapped_amr_patch(silo_file_t* file,
                                       const char** field_component_names,
                                       const char* patch_grid_name,
                                       amr_patch_t* patch,
-                                      sp_func_t* mapping)
+                                      coord_mapping_t* mapping)
 {
-  write_amr_patch_grid(file, patch_grid_name, 
-                       patch->i2 - patch->i1, patch->j2 - patch->j1, patch->k2 - patch->k1, 
-                       patch->i1, patch->i2, patch->j1, patch->j2, patch->k1, patch->k2, mapping, false);
-  write_amr_patch_data(file, field_component_names, patch_grid_name, patch, NULL, false);
+  int N1 = patch->i2 - patch->i1, N2 = patch->j2 - patch->j1, N3 = patch->k2 - patch->k1; 
+  write_amr_patch_grid(file, patch_grid_name, N1, N2, N3, patch->i1, patch->i2, 
+                       patch->j1, patch->j2, patch->k1, patch->k2, mapping, false);
+  write_amr_patch_data(file, field_component_names, patch_grid_name, N1, N2, N3,
+                       patch, mapping, NULL, false);
 }
 
 bool silo_file_contains_amr_patch(silo_file_t* file, 
@@ -256,10 +315,10 @@ void silo_file_write_amr_grid(silo_file_t* file,
   amr_grid_get_extents(grid, &npx, &npy, &npz);
   amr_grid_get_patch_size(grid, &nx, &ny, &nz, &ng);
 
-  sp_func_t* mapping = amr_grid_mapping(grid);
+  coord_mapping_t* mapping = amr_grid_mapping(grid);
   char* patch_grid_names[num_local_patches];
   int patch_grid_types[num_local_patches];
-  int n1 = npx * nx, n2 = npy * ny, n3 = npz * nz;
+  int N1 = npx * nx, N2 = npy * ny, N3 = npz * nz;
   int pos = 0, i, j, k, l = 0;
   while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k)) 
   {
@@ -269,7 +328,7 @@ void silo_file_write_amr_grid(silo_file_t* file,
     snprintf(patch_grid_name, FILENAME_MAX-1, "%s_%d_%d_%d", grid_name, i, j, k);
     patch_grid_names[l] = string_dup(patch_grid_name);
     patch_grid_types[l] = DB_QUAD_RECT;
-    write_amr_patch_grid(file, patch_grid_names[l], n1, n2, n3, i1, i2, j1, j2, k1, k2, mapping, true);
+    write_amr_patch_grid(file, patch_grid_names[l], N1, N2, N3, i1, i2, j1, j2, k1, k2, mapping, true);
     ++l;
   }
   ASSERT(l == num_local_patches);
@@ -301,9 +360,20 @@ void silo_file_write_amr_grid_data(silo_file_t* file,
 {
   int num_local_patches = amr_grid_data_num_local_patches(grid_data);
   int num_components = amr_grid_data_num_components(grid_data);
+
+  amr_grid_t* grid = amr_grid_data_grid(grid_data);
+  coord_mapping_t* mapping = amr_grid_mapping(grid);
+  int npx, npy, npz, nx, ny, nz, ng;
+  amr_grid_get_extents(grid, &npx, &npy, &npz);
+  amr_grid_get_patch_size(grid, &nx, &ny, &nz, &ng);
+
   char* field_names[num_components];
   char* multi_field_names[num_components][num_local_patches];
   int multi_field_types[num_local_patches];
+  int N1 = npx * nx, N2 = npy * ny, N3 = npz * nz;
+
+  char* patch_grid_names[num_local_patches];
+  int patch_grid_types[num_local_patches];
   amr_patch_t* patch;
   int pos = 0, i, j, k, l = 0;
   while (amr_grid_data_next_local_patch(grid_data, &pos, &i, &j, &k, &patch))
@@ -318,7 +388,8 @@ void silo_file_write_amr_grid_data(silo_file_t* file,
     }
     char patch_grid_name[FILENAME_MAX];
     snprintf(patch_grid_name, FILENAME_MAX-1, "%s_%d_%d_%d", grid_name, i, j, k);
-    write_amr_patch_data(file, (const char**)field_names, patch_grid_name, patch, field_metadata, true);
+    write_amr_patch_data(file, (const char**)field_names, patch_grid_name, N1, N2, N3, 
+                         patch, mapping, field_metadata, true);
     multi_field_types[l] = DB_QUADVAR;
     ++l;
 

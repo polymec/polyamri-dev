@@ -58,7 +58,7 @@ struct amr_grid_t
   int* remote_owners;
 
   // Mapping function.
-  sp_func_t* mapping;
+  coord_mapping_t* mapping;
 
   // Associated properties.
   string_ptr_unordered_map_t* properties;
@@ -167,13 +167,12 @@ void amr_grid_free(amr_grid_t* grid)
   polymec_free(grid);
 }
 
-void amr_grid_set_mapping(amr_grid_t* grid, sp_func_t* mapping)
+void amr_grid_set_mapping(amr_grid_t* grid, coord_mapping_t* mapping)
 {
-  ASSERT((mapping == NULL) || (sp_func_num_comp(mapping) == 3));
   grid->mapping = mapping;
 }
 
-sp_func_t* amr_grid_mapping(amr_grid_t* grid)
+coord_mapping_t* amr_grid_mapping(amr_grid_t* grid)
 {
   return grid->mapping;
 }
