@@ -72,10 +72,12 @@ bool silo_file_contains_amr_grid_hierarchy(silo_file_t* file,
                                            const char* grid_hierarchy_name);
 
 
-// Writes the given AMR data hierarchy to the given Silo file.
+// Writes the given AMR data hierarchy (containing fields with the given names)
+// to the given Silo file, associating it with the given grid hierarchy.
 void silo_file_write_amr_data_hierarchy(silo_file_t* file, 
-                                        const char* hierarchy_name,
-                                        amr_data_hierarchy_t* hierarchy,
+                                        const char** field_component_names,
+                                        const char* grid_hierarchy_name,
+                                        amr_data_hierarchy_t* data_hierarchy,
                                         silo_field_metadata_t** field_metadata);
 
 // Returns true if the Silo file contains an AMR data hierarchy with the given 

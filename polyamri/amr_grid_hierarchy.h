@@ -42,15 +42,15 @@ int amr_grid_hierarchy_ref_ratio(amr_grid_hierarchy_t* hierarchy);
 // x, y, and z periodicity into the given periodicity array.
 void amr_grid_hierarchy_get_periodicity(amr_grid_hierarchy_t* hierarchy, bool* periodicity);
 
-// Adds another level of refinement to this hierarchy, associating it with 
-// the next-coarsest level. Returns the grid just added.
+// Adds a new (finer) level of refinement to this hierarchy, associating it with the 
+// next-coarsest level. Returns the grid just added.
 amr_grid_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy);
 
-// Traverses the grid hierarchy from the coarsest level to the finest.
+// Traverses the hierarchy of grids from coarsest to finest.
 // Set *pos to 0 to reset the iteration.
 bool amr_grid_hierarchy_next_coarsest(amr_grid_hierarchy_t* hierarchy, int* pos, amr_grid_t** level);
 
-// Traverses the grid hierarchy from the finest level to the coarsest.
+// Traverses the hierarchy of grids from finest to coarsest.
 // Set *pos to 0 to reset the iteration.
 bool amr_grid_hierarchy_next_finest(amr_grid_hierarchy_t* hierarchy, int* pos, amr_grid_t** level);
 

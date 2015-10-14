@@ -351,6 +351,15 @@ void silo_file_write_amr_grid_hierarchy(silo_file_t* file,
                                         const char* hierarchy_name,
                                         amr_grid_hierarchy_t* hierarchy)
 {
+  // First, write out all the refinement levels in the hierarchy.
+  int pos = 0, l = 0;
+  amr_grid_t* grid;
+  while (amr_grid_hierarchy_next_coarsest(hierarchy, &pos, &grid))
+  {
+    char grid_name[FILENAME_MAX];
+    snprintf(grid_name, FILENAME_MAX-1, "%s_level_%d", hierarchy_name, l);
+    silo_file_write_amr_grid(file, grid_name, grid);
+  }
 }
 
 bool silo_file_contains_amr_grid_hierarchy(silo_file_t* file, 
@@ -359,10 +368,36 @@ bool silo_file_contains_amr_grid_hierarchy(silo_file_t* file,
 }
 
 void silo_file_write_amr_data_hierarchy(silo_file_t* file, 
-                                        const char* hierarchy_name,
-                                        amr_data_hierarchy_t* hierarchy,
+                                        const char** field_component_names,
+                                        const char* grid_hierarchy_name,
+                                        amr_data_hierarchy_t* data_hierarchy,
                                         silo_field_metadata_t** field_metadata)
 {
+  int num_components = amr_data_hierarchy_num_components(data_hierarchy);
+
+  // First, write out all the refinement levels in the hierarchy.
+  int pos = 0, l = 0;
+  amr_grid_data_t* data;
+  while (amr_data_hierarchy_next_coarsest(data_hierarchy, &pos, &data))
+  {
+    char* field_names[num_components];
+    for (int c = 0; c < num_components; ++c)
+    {
+      char field_name[FILENAME_MAX];
+      snprintf(field_name, FILENAME_MAX-1, "%s_level_%d", field_component_names[c], l);
+      field_names[c] = string_dup(field_name);
+    }
+    char grid_name[FILENAME_MAX];
+    snprintf(grid_name, FILENAME_MAX-1, "%s_level_%d", grid_hierarchy_name, l);
+    silo_file_write_amr_grid_data(file, (const char**)field_names, grid_name, data, field_metadata);
+    ++l;
+
+    // Clean up.
+    for (int c = 0; c < num_components; ++c)
+      string_free(field_names[c]);
+  }
+
+#if 0
   // Create a new MRG tree that can hold an AMR hierarchy.
   int num_levels = amr_data_hierarchy_num_levels(hierarchy);
 
@@ -422,6 +457,7 @@ void silo_file_write_amr_data_hierarchy(silo_file_t* file,
   DBfile* dbfile = silo_file_dbfile(file);
   DBPutMrgtree(dbfile, "mrgTree", "amr_mesh", tree, options);
   DBFreeMrgtree(tree);
+#endif
 }
 
 bool silo_file_contains_amr_data_hierarchy(silo_file_t* file, 
