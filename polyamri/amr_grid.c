@@ -112,11 +112,12 @@ amr_grid_t* amr_grid_new(int nx, int ny, int nz,
   grid->py = py;
   grid->pz = pz;
   grid->ng = num_ghosts;
-  grid->num_local_patches = 0;
-  grid->local_patch_indices = NULL;
   grid->x_periodic = periodic_in_x;
   grid->y_periodic = periodic_in_y;
   grid->z_periodic = periodic_in_z;
+  grid->num_local_patches = 0;
+  grid->local_patch_indices = NULL;
+  grid->mapping = NULL;
   grid->patch_types = polymec_malloc(sizeof(patch_type_t) * nx * ny * nz);
   grid->remote_owners = polymec_malloc(sizeof(int) * nx * ny * nz);
   for (int i = 0; i < nx * ny * nz; ++i)

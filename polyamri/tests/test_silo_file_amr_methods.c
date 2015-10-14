@@ -36,7 +36,7 @@ void test_write_amr_patch(void** state)
 
 void test_write_amr_grid(void** state) 
 { 
-  // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 1 component, 
+  // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
   // no ghosts, and no periodicity.
   amr_grid_t* grid = amr_grid_new(4, 4, 4, 10, 10, 10, 0, false, false, false); 
   for (int i = 0; i < 4; ++i)
@@ -52,13 +52,52 @@ void test_write_amr_grid(void** state)
   amr_grid_free(grid); 
 } 
 
+void test_write_amr_grid_data(void** state) 
+{ 
+  // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
+  // no ghosts, and no periodicity.
+  amr_grid_t* grid = amr_grid_new(4, 4, 4, 10, 10, 10, 0, false, false, false); 
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j)
+      for (int k = 0; k < 4; ++k)
+        amr_grid_add_local_patch(grid, i, j, k);
+  amr_grid_finalize(grid);
+
+  // Make a 4-component solution on this grid.
+  amr_grid_data_t* solution = amr_grid_data_new(grid, 4);
+  
+  // Fill it with goodness.
+  int pos = 0, I, J, K;
+  amr_patch_t* patch;
+  while (amr_grid_data_next_local_patch(solution, &pos, &I, &J, &K, &patch))
+  {
+    DECLARE_AMR_PATCH_ARRAY(a, patch);
+    for (int i = patch->i1; i < patch->i2; ++i)
+      for (int j = patch->j1; j < patch->j2; ++j)
+        for (int k = patch->k1; k < patch->k2; ++k)
+          for (int l = 0; l < 4; ++l)
+            a[i][j][k][l] = (real_t)(10*10*4*i + 10*4*j + 4*k + l);
+  }
+
+  // Plot the thing.
+  silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, "test_silo_file_amr_methods", "test_write_amr_grid_data", 1, 0, 0, 0.0);
+  silo_file_write_amr_grid(silo, "grid", grid);
+  const char* field_names[4] = {"sol1", "sol2", "sol3", "sol4"};
+  silo_file_write_amr_grid_data(silo, field_names, "grid", solution, NULL);
+  silo_file_close(silo);
+
+  amr_grid_data_free(solution); 
+  amr_grid_free(grid); 
+} 
+
 int main(int argc, char* argv[]) 
 {
   polymec_init(argc, argv);
   const UnitTest tests[] = 
   {
     unit_test(test_write_amr_patch),
-    unit_test(test_write_amr_grid)
+    unit_test(test_write_amr_grid),
+    unit_test(test_write_amr_grid_data)
   };
   return run_tests(tests);
 }

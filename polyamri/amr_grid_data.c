@@ -48,7 +48,7 @@ void amr_grid_data_free(amr_grid_data_t* grid_data)
 {
   int pos = 0, i, j, k;
   amr_patch_t* patch;
-  while (amr_grid_data_next(grid_data, &pos, &i, &j, &k, &patch))
+  while (amr_grid_data_next_local_patch(grid_data, &pos, &i, &j, &k, &patch))
     amr_patch_free(patch);
   polymec_free(grid_data);
 }
@@ -74,9 +74,9 @@ amr_patch_t* amr_grid_data_patch(amr_grid_data_t* grid_data, int i, int j, int k
   return patches[i][j][k];
 }
 
-bool amr_grid_data_next(amr_grid_data_t* grid_data, int* pos, 
-                        int* i, int* j, int* k, 
-                        amr_patch_t** patch)
+bool amr_grid_data_next_local_patch(amr_grid_data_t* grid_data, int* pos, 
+                                    int* i, int* j, int* k, 
+                                    amr_patch_t** patch)
 {
   bool result = amr_grid_next_local_patch(grid_data->grid, pos, i, j, k);
   if (result)

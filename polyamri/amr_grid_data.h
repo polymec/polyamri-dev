@@ -40,10 +40,9 @@ amr_patch_t* amr_grid_data_patch(amr_grid_data_t* grid_data, int i, int j, int k
 // Traverses the grid data, returning true if a patch was found and false if not.
 // Set *pos to 0 to reset the traversal. Pointers to the patch and its 
 // bounding box are returned in the given locations.
-bool amr_grid_data_next(amr_grid_data_t* grid_data, int* pos, 
-                        int* i, int* j, int* k, 
-                        amr_patch_t** patch);
-
+bool amr_grid_data_next_local_patch(amr_grid_data_t* grid_data, int* pos, 
+                                    int* i, int* j, int* k, 
+                                    amr_patch_t** patch);
 
 // Fills all ghost cells in the amr_grid_data's patches.
 void amr_grid_data_fill_ghosts(amr_grid_data_t* grid_data);

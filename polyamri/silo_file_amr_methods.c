@@ -99,7 +99,8 @@ static void write_amr_patch_grid(silo_file_t* file,
                                  const char* patch_grid_name,
                                  int N1, int N2, int N3,
                                  int i1, int i2, int j1, int j2, int k1, int k2,
-                                 sp_func_t* mapping)
+                                 sp_func_t* mapping,
+                                 bool hide_from_gui)
 {
   ASSERT(i2 > i1);
   ASSERT(j2 > j1);
@@ -163,21 +164,32 @@ static void write_amr_patch_grid(silo_file_t* file,
   coords[2] = x3_node;
 
   // Write the patch grid.
+  DBoptlist* optlist = NULL;
+  int one = 1;
+  if (hide_from_gui)
+  {
+    optlist = DBMakeOptlist(1); 
+    DBAddOption(optlist, DBOPT_HIDE_FROM_GUI, &one);
+  }
   DBPutQuadmesh(dbfile, patch_grid_name, coord_names, coords, dimensions, 3, 
-                SILO_FLOAT_TYPE, coord_type, NULL);
+                SILO_FLOAT_TYPE, coord_type, optlist);
+  if (optlist != NULL)
+    DBFreeOptlist(optlist);
 }
 
 static void write_amr_patch_data(silo_file_t* file,
                                  const char** field_component_names,
                                  const char* patch_grid_name,
                                  amr_patch_t* patch,
-                                 silo_field_metadata_t** field_metadata)
+                                 silo_field_metadata_t** field_metadata,
+                                 bool hide_from_gui)
 {
   ASSERT(patch->i2 > patch->i1);
   ASSERT(patch->j2 > patch->j1);
   ASSERT(patch->k2 > patch->k1);
 
   DBfile* dbfile = silo_file_dbfile(file);
+  int one = 1;
 
   // Write the data.
   int n1 = patch->i2 - patch->i1;
@@ -195,6 +207,12 @@ static void write_amr_patch_data(silo_file_t* file,
           for (int c = 0; c < patch->nc; ++c)
             data[l] = a[i][j][k][c];
     DBoptlist* optlist = (field_metadata != NULL) ? optlist_from_metadata(field_metadata[c]) : NULL;
+    if (hide_from_gui)
+    {
+      if (optlist == NULL)
+        optlist = DBMakeOptlist(1); 
+      DBAddOption(optlist, DBOPT_HIDE_FROM_GUI, &one);
+    }
     DBPutQuadvar1(dbfile, field_component_names[c], patch_grid_name, patch->data,
                   cell_dims, 3, NULL, 0, SILO_FLOAT_TYPE, DB_ZONECENT, optlist);
     optlist_free(optlist);
@@ -212,8 +230,8 @@ void silo_file_write_mapped_amr_patch(silo_file_t* file,
 {
   write_amr_patch_grid(file, patch_grid_name, 
                        patch->i2 - patch->i1, patch->j2 - patch->j1, patch->k2 - patch->k1, 
-                       patch->i1, patch->i2, patch->j1, patch->j2, patch->k1, patch->k2, mapping);
-  write_amr_patch_data(file, field_component_names, patch_grid_name, patch, NULL);
+                       patch->i1, patch->i2, patch->j1, patch->j2, patch->k1, patch->k2, mapping, false);
+  write_amr_patch_data(file, field_component_names, patch_grid_name, patch, NULL, false);
 }
 
 bool silo_file_contains_amr_patch(silo_file_t* file, 
@@ -239,29 +257,29 @@ void silo_file_write_amr_grid(silo_file_t* file,
   amr_grid_get_patch_size(grid, &nx, &ny, &nz, &ng);
 
   sp_func_t* mapping = amr_grid_mapping(grid);
-  char* patch_names[num_local_patches];
-  int patch_types[num_local_patches];
+  char* patch_grid_names[num_local_patches];
+  int patch_grid_types[num_local_patches];
   int n1 = npx * nx, n2 = npy * ny, n3 = npz * nz;
   int pos = 0, i, j, k, l = 0;
   while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k)) 
   {
     // Write out the grid for the patch itself.
     int i1 = nx*i, i2 = nx*(i+1), j1 = ny*j, j2 = ny*(j+1), k1 = nz*k, k2 = nz*(k+1);
-    char patch_name[FILENAME_MAX];
-    snprintf(patch_name, FILENAME_MAX-1, "%s_patch_%d_%d_%d", grid_name, i, j, k);
-    patch_names[l] = string_dup(patch_name);
-    patch_types[l] = DB_QUAD_RECT;
-    write_amr_patch_grid(file, patch_names[l], n1, n2, n3, i1, i2, j1, j2, k1, k2, mapping);
+    char patch_grid_name[FILENAME_MAX];
+    snprintf(patch_grid_name, FILENAME_MAX-1, "%s_%d_%d_%d", grid_name, i, j, k);
+    patch_grid_names[l] = string_dup(patch_grid_name);
+    patch_grid_types[l] = DB_QUAD_RECT;
+    write_amr_patch_grid(file, patch_grid_names[l], n1, n2, n3, i1, i2, j1, j2, k1, k2, mapping, true);
     ++l;
   }
   ASSERT(l == num_local_patches);
 
   // Group all the patches together.
-  DBPutMultimesh(dbfile, grid_name, num_local_patches, (const char* const*)patch_names, patch_types, NULL);
+  DBPutMultimesh(dbfile, grid_name, num_local_patches, (const char* const*)patch_grid_names, patch_grid_types, NULL);
 
   // Clean up.
   for (int p = 0; p < num_local_patches; ++p)
-    string_free(patch_names[p]);
+    string_free(patch_grid_names[p]);
 
   // Add subdomain information for this grid.
   silo_file_add_subdomain_mesh(file, grid_name, DB_QUAD_RECT, NULL);
@@ -284,39 +302,49 @@ void silo_file_write_amr_grid_data(silo_file_t* file,
   int num_local_patches = amr_grid_data_num_local_patches(grid_data);
   int num_components = amr_grid_data_num_components(grid_data);
   char* field_names[num_components];
-  int field_types[num_local_patches];
+  char* multi_field_names[num_components][num_local_patches];
+  int multi_field_types[num_local_patches];
   amr_patch_t* patch;
   int pos = 0, i, j, k, l = 0;
-  while (amr_grid_data_next(grid_data, &pos, &i, &j, &k, &patch))
+  while (amr_grid_data_next_local_patch(grid_data, &pos, &i, &j, &k, &patch))
   {
     // Write out the patch data itself.
-    char patch_grid_name[FILENAME_MAX];
-    snprintf(patch_grid_name, FILENAME_MAX-1, "%s_%d_%d_%d", grid_name, i, j, k);
     for (int c = 0; c < num_components; ++c)
     {
       char field_name[FILENAME_MAX];
       snprintf(field_name, FILENAME_MAX-1, "%s_%d_%d_%d", field_component_names[c], i, j, k);
       field_names[c] = string_dup(field_name);
+      multi_field_names[c][l] = string_dup(field_name);
     }
-    write_amr_patch_data(file, (const char**)field_names, patch_grid_name, patch, field_metadata);
-    field_types[l] = DB_QUADVAR;
+    char patch_grid_name[FILENAME_MAX];
+    snprintf(patch_grid_name, FILENAME_MAX-1, "%s_%d_%d_%d", grid_name, i, j, k);
+    write_amr_patch_data(file, (const char**)field_names, patch_grid_name, patch, field_metadata, true);
+    multi_field_types[l] = DB_QUADVAR;
     ++l;
+
+    for (int c = 0; c < num_components; ++c)
+      string_free(field_names[c]);
   }
   ASSERT(l == num_local_patches);
-
-  // Clean up.
-  for (int c = 0; c < num_components; ++c)
-    string_free(field_names[c]);
 
   // Finally, place multi-* entries into the Silo file.
   DBfile* dbfile = silo_file_dbfile(file);
   for (int c = 0; c < num_components; ++c)
   {
-    DBPutMultivar(dbfile, field_component_names[c], num_local_patches, (const char* const*)field_names[c], field_types, NULL);
+    // We need to associate this multi-variable with our multi-mesh.
+    DBoptlist* optlist = DBMakeOptlist(4);
+    DBAddOption(optlist, DBOPT_MMESH_NAME, (void*)grid_name);
+    DBPutMultivar(dbfile, field_component_names[c], num_local_patches, (const char* const*)multi_field_names[c], multi_field_types, NULL);
+    DBFreeOptlist(optlist);
 
     // Add subdomain information for this component.
     silo_file_add_subdomain_mesh(file, field_component_names[c], DB_QUAD_RECT, NULL);
   }
+
+  // Clean up.
+  for (int c = 0; c < num_components; ++c)
+    for (int p = 0; p < num_local_patches; ++p)
+      string_free(multi_field_names[c][p]);
 }
 
 void silo_file_write_amr_grid_hierarchy(silo_file_t* file, 
