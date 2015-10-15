@@ -8,7 +8,6 @@
 #ifndef POLYAMRI_AMR_GRID_H
 #define POLYAMRI_AMR_GRID_H
 
-#include "geometry/coord_mapping.h"
 #include "polyamri/amr_grid_interpolator.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
@@ -52,16 +51,6 @@ amr_grid_t* amr_grid_new(int nx, int ny, int nz,
 
 // Destroys the given grid and all of its patches.
 void amr_grid_free(amr_grid_t* grid);
-
-// Sets a coordinate mapping that will be associated with this AMR grid. 
-// This coordinate mapping maps points in [0,1]x[0,1]x[0,1] to points in 
-// another logically-rectangular domain. If the mapping is NULL, the grid 
-// will not be mapped.
-void amr_grid_set_mapping(amr_grid_t* grid, coord_mapping_t* mapping);
-
-// Returns the mapping function associated with this AMR grid, or NULL if 
-// no such mapping function exists.
-coord_mapping_t* amr_grid_mapping(amr_grid_t* grid);
 
 // Sets the given AMR grid as a neighbor of this one. "The neighbor slot" 
 // identifies which of the neighbor "slots" will be occupied by the neighbor
@@ -128,9 +117,6 @@ void amr_grid_get_patch_size(amr_grid_t* grid, int* pnx, int* pny, int* pnz, int
 
 // Returns the number of patches that can be stored locally on this grid.
 int amr_grid_num_local_patches(amr_grid_t* grid);
-
-// Returns the bounding box describing the region represented by this grid.
-bbox_t* amr_grid_domain(amr_grid_t* grid);
 
 // Traverses the locally-present patches in the grid, returning true and the 
 // next (i, j, k) triple if the traversal is incomplete, false otherwise. 

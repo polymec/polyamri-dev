@@ -57,9 +57,6 @@ struct amr_grid_t
   patch_type_t* patch_types;
   int* remote_owners;
 
-  // Mapping function.
-  coord_mapping_t* mapping;
-
   // Associated properties.
   string_ptr_unordered_map_t* properties;
 
@@ -117,7 +114,6 @@ amr_grid_t* amr_grid_new(int nx, int ny, int nz,
   grid->z_periodic = periodic_in_z;
   grid->num_local_patches = 0;
   grid->local_patch_indices = NULL;
-  grid->mapping = NULL;
   grid->patch_types = polymec_malloc(sizeof(patch_type_t) * nx * ny * nz);
   grid->remote_owners = polymec_malloc(sizeof(int) * nx * ny * nz);
   for (int i = 0; i < nx * ny * nz; ++i)
@@ -165,16 +161,6 @@ void amr_grid_free(amr_grid_t* grid)
   if (grid->local_patch_indices != NULL)
     polymec_free(grid->local_patch_indices);
   polymec_free(grid);
-}
-
-void amr_grid_set_mapping(amr_grid_t* grid, coord_mapping_t* mapping)
-{
-  grid->mapping = mapping;
-}
-
-coord_mapping_t* amr_grid_mapping(amr_grid_t* grid)
-{
-  return grid->mapping;
 }
 
 void amr_grid_set_neighbor(amr_grid_t* grid, 
