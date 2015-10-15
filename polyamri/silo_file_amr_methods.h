@@ -37,7 +37,8 @@ void silo_file_write_mapped_amr_patch(silo_file_t* file,
 bool silo_file_contains_amr_patch(silo_file_t* file, 
                                   const char* patch_name);
 
-// Writes the given AMR grid to the given Silo file.
+// Writes the given AMR grid to the given Silo file. The grid's coordinates
+// will be mapped from [0,1] x [0,1] x [0,1] if the grid has a mapping.
 void silo_file_write_amr_grid(silo_file_t* file, 
                               const char* grid_name,
                               amr_grid_t* grid);
@@ -48,7 +49,8 @@ bool silo_file_contains_amr_grid(silo_file_t* file,
                                  const char* grid_name);
 
 // Writes the given AMR grid data to the given Silo file, associating it with 
-// the entry for the grid with the given name.
+// the entry for the grid with the given name. The data will not be mapped, 
+// even if the underlying grid has a mapping.
 void silo_file_write_amr_grid_data(silo_file_t* file, 
                                    const char** field_component_names,
                                    const char* grid_name,
@@ -61,7 +63,9 @@ bool silo_file_contains_amr_grid_data(silo_file_t* file,
                                       const char* grid_data_name,
                                       const char* grid_name);
 
-// Writes the given AMR grid hierarchy to the given Silo file.
+// Writes the given AMR grid hierarchy to the given Silo file. The coordinates
+// of the grids will be mapped from [0,1] x [0,1] x [0,1] if they have 
+// mappings.
 void silo_file_write_amr_grid_hierarchy(silo_file_t* file, 
                                         const char* hierarchy_name,
                                         amr_grid_hierarchy_t* hierarchy);
@@ -74,6 +78,7 @@ bool silo_file_contains_amr_grid_hierarchy(silo_file_t* file,
 
 // Writes the given AMR data hierarchy (containing fields with the given names)
 // to the given Silo file, associating it with the given grid hierarchy.
+// The data will not be mapped, even if its underlying grids have mappings.
 void silo_file_write_amr_data_hierarchy(silo_file_t* file, 
                                         const char** field_component_names,
                                         const char* grid_hierarchy_name,
