@@ -6,6 +6,7 @@ add_custom_target(update_polyamri_c ALL
 add_library(polyamri polyamri.c amr_patch.c amr_grid.c amr_grid_data.c
             amr_grid_interpolator.c amr_grid_hierarchy.c amr_data_hierarchy.c 
             amr_grid_assembly.c grid_to_bbox_coord_mapping.c
+            partition_amr_grid.c
             linear_amr_grid_interpolator.c
             silo_file_amr_methods.c)
 #            interpreter_register_amr_functions.c)
