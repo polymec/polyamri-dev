@@ -23,14 +23,13 @@ if (NOT DEFINED POLYMEC_VERSION)
 endif()
 message("-- Found polymec library in ${POLYMEC_PREFIX} (v${POLYMEC_VERSION})")
 
-# Pass POLYAMRI_VERSION and friends as definitions to the compiler.
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPOLYAMRI_VERSION=\\\"${POLYAMRI_VERSION}\\\"")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPOLYAMRI_MAJOR_VERSION=${POLYAMRI_MAJOR_VERSION}")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPOLYAMRI_MINOR_VERSION=${POLYAMRI_MINOR_VERSION}")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPOLYAMRI_PATCH_VERSION=${POLYAMRI_PATCH_VERSION}")
+# Generate polyamri_version.h with the right version numbers.
+add_custom_target(update_version_h ALL
+                  python ${POLYMEC_PREFIX}/share/polymec/update_version_h.py polyamri ${POLYAMRI_VERSION} ${PROJECT_BINARY_DIR}/polyamri/polyamri_version.h)
 
 # Look for headers in the top directory.
 include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_BINARY_DIR})
 
 # Look for libraries in these directories.
 link_directories("${POLYMEC_PREFIX}/lib")
