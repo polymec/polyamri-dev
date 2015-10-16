@@ -14,7 +14,7 @@
 
 void test_ctor(void** state) 
 {
-  amr_grid_t* level = amr_grid_new(4, 4, 4, 16, 16, 16, 1, false, false, false);
+  amr_grid_t* level = amr_grid_new(MPI_COMM_SELF, 4, 4, 4, 16, 16, 16, 1, false, false, false);
   assert_int_equal(0, amr_grid_num_local_patches(level));
 //  amr_grid_fill_ghosts(level, patches); // Should do nothing.
   amr_grid_free(level);
@@ -23,7 +23,7 @@ void test_ctor(void** state)
 static void test_fill_ghosts(void** state)
 { 
   // Set up a 4 x 4 x 4 array of patches in a grid level and fill ghost values.
-  amr_grid_t* level = amr_grid_new(4, 4, 4, 16, 16, 16, 1, true, true, true);
+  amr_grid_t* level = amr_grid_new(MPI_COMM_SELF, 4, 4, 4, 16, 16, 16, 1, true, true, true);
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)

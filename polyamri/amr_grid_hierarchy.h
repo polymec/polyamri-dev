@@ -20,7 +20,8 @@ typedef struct amr_grid_hierarchy_t amr_grid_hierarchy_t;
 // number of ghost cells in each tile, the (integer power of 2) refinement 
 // ratio between levels, and the given periodicity. The coarsest grid level, 
 // when added, will have nx x ny x nz tiles of dimension px x py x pz, 
-amr_grid_hierarchy_t* amr_grid_hierarchy_new(int nx, int ny, int nz, 
+amr_grid_hierarchy_t* amr_grid_hierarchy_new(MPI_Comm comm,
+                                             int nx, int ny, int nz, 
                                              int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
@@ -28,6 +29,13 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(int nx, int ny, int nz,
 
 // Destroys the given grid hierarchy and all of its levels.
 void amr_grid_hierarchy_free(amr_grid_hierarchy_t* hierarchy);
+
+// Returns the MPI communicator associated with this AMR grid hierarchy.
+MPI_Comm amr_grid_hierarchy_comm(amr_grid_hierarchy_t* hierarchy);
+
+// Associates the given MPI communicator with this AMR grid hierarchy.
+void amr_grid_hierarchy_set_comm(amr_grid_hierarchy_t* hierarchy, MPI_Comm comm);
+
 
 // Returns the current number of grid levels.
 int amr_grid_hierarchy_num_levels(amr_grid_hierarchy_t* hierarchy);

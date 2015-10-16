@@ -63,6 +63,9 @@ struct amr_grid_t
   // Ratio of refinement between this grid and its "neighbors"
   int ref_ratio; 
 
+  // MPI communicator.
+  MPI_Comm comm;
+
   // Coarser grid and associated interpolator.
   amr_grid_t* coarser;
   amr_grid_interpolator_t* coarse_interpolator;
@@ -83,7 +86,8 @@ struct amr_grid_t
   bool finalized;
 };
 
-amr_grid_t* amr_grid_new(int nx, int ny, int nz, 
+amr_grid_t* amr_grid_new(MPI_Comm comm,
+                         int nx, int ny, int nz, 
                          int px, int py, int pz, 
                          int num_ghosts, 
                          bool periodic_in_x, 
@@ -116,6 +120,7 @@ amr_grid_t* amr_grid_new(int nx, int ny, int nz,
   grid->local_patch_indices = NULL;
   grid->patch_types = polymec_malloc(sizeof(patch_type_t) * nx * ny * nz);
   grid->remote_owners = polymec_malloc(sizeof(int) * nx * ny * nz);
+  grid->comm = comm;
   for (int i = 0; i < nx * ny * nz; ++i)
   {
     grid->patch_types[i] = NO_PATCH;
@@ -161,6 +166,16 @@ void amr_grid_free(amr_grid_t* grid)
   if (grid->local_patch_indices != NULL)
     polymec_free(grid->local_patch_indices);
   polymec_free(grid);
+}
+
+MPI_Comm amr_grid_comm(amr_grid_t* grid)
+{
+  return grid->comm;
+}
+
+void amr_grid_set_comm(amr_grid_t* grid, MPI_Comm comm)
+{
+  grid->comm = comm;
 }
 
 void amr_grid_set_neighbor(amr_grid_t* grid, 

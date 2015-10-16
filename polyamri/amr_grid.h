@@ -8,6 +8,7 @@
 #ifndef POLYAMRI_AMR_GRID_H
 #define POLYAMRI_AMR_GRID_H
 
+#include <mpi.h>
 #include "polyamri/amr_grid_interpolator.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
@@ -42,7 +43,8 @@ typedef enum
 // Creates a new empty grid level defined on the region filling [0,1]x[0,1]x[0,1]
 // with nx x ny x nz patches of size px x py x pz. Each patch has the given 
 // number of ghost cells. This grid is not associated with any other grids.
-amr_grid_t* amr_grid_new(int nx, int ny, int nz, 
+amr_grid_t* amr_grid_new(MPI_Comm comm,
+                         int nx, int ny, int nz, 
                          int px, int py, int pz,
                          int num_ghosts,
                          bool periodic_in_x, 
@@ -51,6 +53,12 @@ amr_grid_t* amr_grid_new(int nx, int ny, int nz,
 
 // Destroys the given grid and all of its patches.
 void amr_grid_free(amr_grid_t* grid);
+
+// Returns the MPI communicator associated with this AMR grid.
+MPI_Comm amr_grid_comm(amr_grid_t* grid);
+
+// Associates the given MPI communicator with this AMR grid.
+void amr_grid_set_comm(amr_grid_t* grid, MPI_Comm comm);
 
 // Sets the given AMR grid as a neighbor of this one. "The neighbor slot" 
 // identifies which of the neighbor "slots" will be occupied by the neighbor

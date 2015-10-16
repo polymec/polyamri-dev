@@ -15,9 +15,11 @@ struct amr_grid_hierarchy_t
   bool x_periodic, y_periodic, z_periodic;
   amr_grid_interpolator_t* interpolator;
   ptr_array_t* levels;
+  MPI_Comm comm;
 };
 
-amr_grid_hierarchy_t* amr_grid_hierarchy_new(int nx, int ny, int nz, 
+amr_grid_hierarchy_t* amr_grid_hierarchy_new(MPI_Comm comm,
+                                             int nx, int ny, int nz, 
                                              int px, int py, int pz,
                                              int num_ghosts, int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
@@ -49,6 +51,16 @@ void amr_grid_hierarchy_free(amr_grid_hierarchy_t* hierarchy)
 {
   ptr_array_free(hierarchy->levels);
   free(hierarchy);
+}
+
+MPI_Comm amr_grid_hierarchy_comm(amr_grid_hierarchy_t* hierarchy)
+{
+  return hierarchy->comm;
+}
+
+void amr_grid_hierarchy_set_comm(amr_grid_hierarchy_t* hierarchy, MPI_Comm comm)
+{
+  hierarchy->comm = comm;
 }
 
 int amr_grid_hierarchy_num_levels(amr_grid_hierarchy_t* hierarchy)
@@ -87,7 +99,7 @@ amr_grid_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
     ny *= ref_ratio;
     nz *= ref_ratio;
   }
-  amr_grid_t* new_level = amr_grid_new(nx, ny, nz,
+  amr_grid_t* new_level = amr_grid_new(hierarchy->comm, nx, ny, nz,
                                        px, py, pz, hierarchy->num_ghosts,
                                        hierarchy->x_periodic, 
                                        hierarchy->y_periodic, 
