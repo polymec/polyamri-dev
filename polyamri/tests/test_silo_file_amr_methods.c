@@ -29,7 +29,7 @@ void test_write_amr_patch(void** state)
                  .y1 = -25.0, .y2 = 25.0,
                  .z1 = -12.5, .z2 = 12.5};
   coord_mapping_t* mapping = grid_to_bbox_coord_mapping_new(&bbox);
-  silo_file_write_amr_patch(silo, &field, "patch_with_bbox", patch, mapping, false);
+  silo_file_write_amr_patch(silo, &field, "patch_with_bbox", patch, mapping, NULL);
   silo_file_close(silo);
   amr_patch_free(patch); 
 } 

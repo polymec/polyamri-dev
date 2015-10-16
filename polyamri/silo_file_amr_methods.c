@@ -216,13 +216,13 @@ void silo_file_write_amr_patch(silo_file_t* file,
                                const char* patch_grid_name,
                                amr_patch_t* patch,
                                coord_mapping_t* mapping,
-                               bool map_data)
+                               coord_mapping_t* data_mapping)
 {
   int N1 = patch->i2 - patch->i1, N2 = patch->j2 - patch->j1, N3 = patch->k2 - patch->k1; 
   write_amr_patch_grid(file, patch_grid_name, N1, N2, N3, patch->i1, patch->i2, 
                        patch->j1, patch->j2, patch->k1, patch->k2, mapping, false);
   write_amr_patch_data(file, field_component_names, patch_grid_name, 
-                       patch, NULL, N1, N2, N3, (map_data ? mapping : NULL), false); 
+                       patch, NULL, N1, N2, N3, data_mapping, false);
 }
 
 bool silo_file_contains_amr_patch(silo_file_t* file, 

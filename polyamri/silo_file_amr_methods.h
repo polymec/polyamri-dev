@@ -16,14 +16,13 @@
 // is provided, the coordinates of the patch will be mapped from 
 // [0,1] x [0,1] x [0,1] to a deformed region of space. This is mostly useful 
 // for debugging purposes, since AMR grids write patches out using different 
-// machinery. If map_data is true, data will also be mapped using the same 
-// mapping; if false, it will not.
+// machinery. If data_mapping is non-NULL, data will also be mapped.
 void silo_file_write_amr_patch(silo_file_t* file, 
                                const char** field_component_names,
                                const char* patch_name,
                                amr_patch_t* patch,
                                coord_mapping_t* mapping,
-                               bool map_data);
+                               coord_mapping_t* data_mapping);
 
 // Returns true if the Silo file contains an AMR patch with the given name, 
 // false if not. 
