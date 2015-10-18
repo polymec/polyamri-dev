@@ -57,9 +57,6 @@ struct amr_grid_t
   patch_type_t* patch_types;
   int* remote_owners;
 
-  // Associated properties.
-  string_ptr_unordered_map_t* properties;
-
   // Ratio of refinement between this grid and its "neighbors"
   int ref_ratio; 
 
@@ -139,7 +136,6 @@ amr_grid_t* amr_grid_new(MPI_Comm comm,
     grid->neighbor_interpolators[n] = NULL;
   }
 
-  grid->properties = string_ptr_unordered_map_new();
   grid->ghost_filler_starters = ptr_array_new();
   grid->ghost_filler_finishers = ptr_array_new();
   grid->finalized = false;
@@ -160,7 +156,6 @@ void amr_grid_free(amr_grid_t* grid)
     amr_grid_interpolator_free(grid->fine_interpolator);
   polymec_free(grid->patch_types);
   polymec_free(grid->remote_owners);
-  string_ptr_unordered_map_free(grid->properties);
   ptr_array_free(grid->ghost_filler_starters);
   ptr_array_free(grid->ghost_filler_finishers);
   if (grid->local_patch_indices != NULL)
@@ -191,24 +186,6 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
   ASSERT(!(grid->z_periodic && (neighbor_slot == AMR_GRID_Z2_NEIGHBOR)));
   grid->neighbors[neighbor_slot] = neighbor;
   grid->neighbor_interpolators[neighbor_slot] = interpolator;
-}
-
-void amr_grid_set_property(amr_grid_t* grid,
-                           const char* name,
-                           void* property,
-                           void (*property_dtor)(void* property))
-{
-  string_ptr_unordered_map_insert_with_kv_dtors(grid->properties, string_dup(name), property, string_free, property_dtor);
-}
-
-void* amr_grid_property(amr_grid_t* grid,
-                        const char* name)
-{
-  void** ptr = string_ptr_unordered_map_get(grid->properties, (char*)name);
-  if (ptr != NULL)
-    return *ptr;
-  else
-    return NULL;
 }
 
 void amr_grid_associate_finer(amr_grid_t* grid, 
@@ -859,3 +836,94 @@ void amr_grid_fill_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
   amr_grid_start_filling_ghosts(grid, data);
   amr_grid_finish_filling_ghosts(grid, data);
 }
+
+adj_graph_t* graph_from_amr_grid_patches(amr_grid_t* grid)
+{
+  // Create a graph whose vertices are the grid's local patches.
+  adj_graph_t* g = adj_graph_new(grid->comm, grid->num_local_patches);
+
+  // Allocate space in the graph for the edges (connections between patches).
+  for (int i = 0; i < grid->num_local_patches; ++i)
+  {
+//    adj_graph_set_num_edges(g, i, num_connected_patches);
+  }
+  
+  // Now fill in the edges.
+  for (int i = 0; i < grid->num_local_patches; ++i)
+  {
+  }
+
+  return g;
+}
+
+static size_t amr_grid_byte_size(void* obj)
+{
+  amr_grid_t* grid = obj;
+  
+  size_t storage =
+    // Intrinsic metadata.
+    7*sizeof(int) + 3*sizeof(bool) + 
+
+    // Information about which patches are present.
+    (1 + 2 * (grid->nx * grid->ny + grid->nz)) * sizeof(int);
+    
+  // Everything else (grid associations, ghost fillers) cannot be 
+  // serialized, so the deserialized grid is manifestly not finalized.
+  return storage;
+}
+
+static void* amr_grid_byte_read(byte_array_t* bytes, size_t* offset)
+{
+  // Read the intrinsic metadata.
+  int nx, ny, nz, px, py, pz, ng;
+  bool x_periodic, y_periodic, z_periodic;
+  byte_array_read_ints(bytes, 1, &nx, offset);
+  byte_array_read_ints(bytes, 1, &ny, offset);
+  byte_array_read_ints(bytes, 1, &nz, offset);
+  byte_array_read_ints(bytes, 1, &px, offset);
+  byte_array_read_ints(bytes, 1, &py, offset);
+  byte_array_read_ints(bytes, 1, &pz, offset);
+  byte_array_read_ints(bytes, 1, &ng, offset);
+  byte_array_read_ints(bytes, 1, (int*)&x_periodic, offset);
+  byte_array_read_ints(bytes, 1, (int*)&y_periodic, offset);
+  byte_array_read_ints(bytes, 1, (int*)&z_periodic, offset);
+
+  // Create the empty grid.
+  amr_grid_t* grid = amr_grid_new(MPI_COMM_WORLD, nx, ny, nz, px, py, pz,
+                                  ng, x_periodic, y_periodic, z_periodic);
+                                      
+  // Read all the patch metadata.
+  byte_array_read_ints(bytes, 1, &grid->num_local_patches, offset);
+  byte_array_read_ints(bytes, nx*ny*nz, (int*)grid->patch_types, offset);
+  byte_array_read_ints(bytes, nx*ny*nz, grid->remote_owners, offset);
+
+  return grid;
+}
+
+static void amr_grid_byte_write(void* obj, byte_array_t* bytes, size_t* offset)
+{
+  amr_grid_t* grid = obj;
+
+  // Write the intrinsic metadata.
+  byte_array_write_ints(bytes, 1, &grid->nx, offset);
+  byte_array_write_ints(bytes, 1, &grid->ny, offset);
+  byte_array_write_ints(bytes, 1, &grid->nz, offset);
+  byte_array_write_ints(bytes, 1, &grid->px, offset);
+  byte_array_write_ints(bytes, 1, &grid->py, offset);
+  byte_array_write_ints(bytes, 1, &grid->pz, offset);
+  byte_array_write_ints(bytes, 1, &grid->ng, offset);
+  byte_array_write_ints(bytes, 1, (int*)&grid->x_periodic, offset);
+  byte_array_write_ints(bytes, 1, (int*)&grid->y_periodic, offset);
+  byte_array_write_ints(bytes, 1, (int*)&grid->z_periodic, offset);
+
+  // Write all the patch metadata.
+  byte_array_write_ints(bytes, 1, &grid->num_local_patches, offset);
+  byte_array_write_ints(bytes, grid->nx*grid->ny*grid->nz, (int*)grid->patch_types, offset);
+  byte_array_write_ints(bytes, grid->nx*grid->ny*grid->nz, grid->remote_owners, offset);
+}
+
+serializer_t* amr_grid_serializer()
+{
+  return serializer_new("amr_grid", amr_grid_byte_size, amr_grid_byte_read, amr_grid_byte_write, NULL);
+}
+

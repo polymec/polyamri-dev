@@ -9,6 +9,8 @@
 #define POLYAMRI_AMR_GRID_H
 
 #include <mpi.h>
+#include "core/adj_graph.h"
+#include "core/serializer.h"
 #include "polyamri/amr_grid_interpolator.h"
 
 // An AMR grid is a single level in an AMR hierarchy. It consists of a set 
@@ -68,14 +70,6 @@ void amr_grid_set_neighbor(amr_grid_t* grid,
                            amr_grid_neighbor_slot_t neighbor_slot,
                            amr_grid_t* neighbor,
                            amr_grid_interpolator_t* interpolator);
-
-// Associates a named property (datum) with this grid. An optional 
-// destructor function specifies how the datum should be destroyed when the 
-// grid is destroyed.
-void amr_grid_set_property(amr_grid_t* grid,
-                           const char* name,
-                           void* property,
-                           void (*property_dtor)(void* property));
 
 // Associates a finer grid with this one, with the given refinement ratio 
 // (which must be a power of 2). The given interpolator is used to transfer 
@@ -138,10 +132,6 @@ bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k);
 // x, y, and z periodicity into the given (3-wide) periodicity array.
 void amr_grid_get_periodicity(amr_grid_t* grid, bool* periodicity);
 
-// Retrieves the property with the given name from this grid, or returns 
-// NULL if no data is associated using that index.
-void* amr_grid_property(amr_grid_t* grid, const char* name);
-
 //------------------------------------------------------------------------
 //                          Service methods
 //------------------------------------------------------------------------
@@ -162,6 +152,13 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
 // Concludes an asynchronous ghost-cell-filling operation initiated by 
 // a call to amr_grid_start_filling_ghosts().
 void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
+
+// Creates and returns an adjacency graph representing the connectivity of 
+// the patches within this AMR grid.
+adj_graph_t* graph_from_amr_grid_patches(amr_grid_t* grid);
+
+// Returns a serializer object that can read/write AMR grids from/to byte arrays.
+serializer_t* amr_grid_serializer();
 
 #endif
 

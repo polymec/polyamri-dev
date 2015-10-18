@@ -18,6 +18,16 @@ extern int64_t* partition_graph(adj_graph_t* global_graph,
                                 int* weights,
                                 real_t imbalance_tol);
 
+// Creates a grid from a subset of the patches of a global grid.
+static amr_grid_t* create_subgrid(MPI_Comm comm,
+                                  amr_grid_t* global_grid,
+                                  int64_t* global_partition,
+                                  index_t* vtx_dist,
+                                  int* indices, int num_indices)
+{
+  // FIXME
+  return NULL;
+}
 
 static void amr_grid_distribute(amr_grid_t** grid, 
                                 MPI_Comm comm,
@@ -229,6 +239,68 @@ exchanger_t* partition_amr_grid(amr_grid_t** grid,
                                 real_t imbalance_tol)
 {
 #if POLYMEC_HAVE_MPI
+  START_FUNCTION_TIMER();
+  ASSERT((weights == NULL) || (imbalance_tol > 0.0));
+  ASSERT((weights == NULL) || (imbalance_tol <= 1.0));
+  ASSERT((*grid == NULL) || (amr_grid_comm(*grid) == MPI_COMM_SELF));
+
+  int nprocs, rank;
+  MPI_Comm_size(comm, &nprocs);
+  MPI_Comm_rank(comm, &rank);
+  ASSERT((rank != 0) || (*grid != NULL));
+
+  // On a single process, partitioning has no meaning, but we do replace the communicator
+  // if needed. NOTE: the exchanger will still have its original communicator, but this 
+  // shouldn't matter in any practical sense.
+  if (nprocs == 1)
+  {
+    if (comm != amr_grid_comm(*grid))
+      amr_grid_set_comm(*grid, comm);
+    STOP_FUNCTION_TIMER();
+    return exchanger_new(comm);
+  }
+
+  log_debug("partition_amr_grid: Partitioning grid into %d subdomains.", nprocs);
+
+  // If grids on rank != 0 are not NULL, we delete them.
+  amr_grid_t* g = *grid;
+  if ((rank != 0) && (g != NULL))
+  {
+    amr_grid_free(g);
+    *grid = g = NULL; 
+  }
+
+  // Generate a global adjacency graph for the mesh.
+  adj_graph_t* global_graph = (g != NULL) ? graph_from_amr_grid_patches(g) : NULL;
+
+#ifndef NDEBUG
+  // Make sure there are enough patches to go around for the processes we're given.
+  if (rank == 0)
+  {
+    ASSERT(amr_grid_num_local_patches(g) >= nprocs);
+  }
+#endif
+
+  // Map the graph to the different domains, producing a local partition vector.
+  int64_t* global_partition = (rank == 0) ? partition_graph(global_graph, comm, weights, imbalance_tol): NULL;
+
+  // Distribute the grid.
+  log_debug("partition_amr_grid: Distributing grid to %d processes.", nprocs);
+  amr_grid_distribute(grid, comm, global_graph, global_partition);
+
+  // Set up an exchanger to distribute field data.
+  int num_vertices = (g != NULL) ? adj_graph_num_vertices(global_graph) : 0;
+  exchanger_t* distributor = create_distributor(comm, global_partition, num_vertices);
+
+  // Clean up.
+  if (global_graph != NULL)
+    adj_graph_free(global_graph);
+  if (global_partition != NULL)
+    polymec_free(global_partition);
+
+  // Return the migrator.
+  STOP_FUNCTION_TIMER();
+  return distributor;
 #else
   // Replace the communicator if needed.
   if (comm != amr_grid_comm(*grid))
@@ -267,7 +339,7 @@ int64_t* partition_vector_from_amr_grid(amr_grid_t* global_grid,
   }
 
   // Generate a global adjacency graph for the patches in the grid.
-  adj_graph_t* global_graph = (rank == 0) ? graph_from_amr_grid_local_patches(global_grid) : NULL;
+  adj_graph_t* global_graph = (rank == 0) ? graph_from_amr_grid_patches(global_grid) : NULL;
 
 #ifndef NDEBUG
   // Make sure there are enough patches to go around for the processes we're given.
@@ -322,7 +394,7 @@ exchanger_t* distribute_amr_grid(amr_grid_t** grid, MPI_Comm comm, int64_t* glob
   }
 
   // Generate a global adjacency graph for the grid.
-  adj_graph_t* global_graph = (g != NULL) ? graph_from_amr_grid_local_patches(g) : NULL;
+  adj_graph_t* global_graph = (g != NULL) ? graph_from_amr_grid_patches(g) : NULL;
 
   // Distribute the grid.
   amr_grid_distribute(grid, comm, global_graph, global_partition);
