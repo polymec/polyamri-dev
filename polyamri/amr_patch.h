@@ -15,6 +15,10 @@
 // multi-component data (nc components) at every (i, j, k) triple. It 
 // allocates space for ng ghost indices in every dimension. Data are accessed 
 // within the data array, e.g. p->data[i][j][k][c].
+//
+// The index space is bounded by [i1, i2-1] in the "i" direction, [j1, j2-1]
+// in the "j" direction, and [k1, k2-1] in the "k" direction. Ghost cells pad 
+// these indices on either side.
 typedef struct 
 {
   // Data storage for the patch.

@@ -28,22 +28,13 @@ typedef enum
 // filling ghost cells.
 typedef struct
 {
+  void* data;
   int (*method)(amr_grid_t*, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
-  int i_dest, j_dest, k_dest;
-  int i_src, j_src, k_src;
-} amr_grid_ghost_filler_starter_t;
-
-// This stores a function and its arguments for finishing the process of 
-// filling ghost cells.
-typedef struct
-{
-  void (*method)(amr_grid_t*, int, amr_patch_t*, int, int, int, amr_patch_t*, int, int, int);
-  int token;
   amr_patch_t* dest_patch;
   int i_dest, j_dest, k_dest;
   amr_patch_t* src_patch;
   int i_src, j_src, k_src;
-} amr_grid_ghost_filler_finisher_t;
+} ghost_filler_t;
 
 struct amr_grid_t
 {
@@ -280,7 +271,6 @@ void amr_grid_finalize(amr_grid_t* grid)
     }
   }
 
-#if 0
   // Assemble our ghost fillers.
   for (int i = 0; i < grid->nx; ++i)
   {
@@ -377,7 +367,7 @@ static inline patch_type_t get_patch_type(amr_grid_t* grid, int i, int j, int k)
   return grid->patch_types[grid->nz*grid->ny*i + grid->nz*j + k];
 }
 
-bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k)
+bool amr_grid_has_local_patch(amr_grid_t* grid, int i, int j, int k)
 {
   return (get_patch_type(grid, i, j, k) == LOCAL_SAME_LEVEL);
 }
@@ -405,11 +395,11 @@ static int local_copy_west_to_east(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  for (int jj = j1; jj < j2; ++jj)
-    for (int kk = k1; kk < k2; ++kk)
+  for (int j = j1; j < j2; ++j)
+    for (int k = k1; k < k2; ++k) 
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          d[i1-g-1][jj][kk][c] = s[i2-g-1][jj][kk][c];
+          d[i1-g-1][j][k][c] = s[i2-g-1][j][k][c];
   return 0;
 }
 
@@ -436,11 +426,11 @@ static int local_copy_east_to_west(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  for (int jj = j1; jj < j2; ++jj)
-    for (int kk = k1; kk < k2; ++kk)
+  for (int j = j1; j < j2; ++j)
+    for (int k = k1; k < k2; ++k) 
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          d[i2+g][jj][kk][c] = s[i1+ng-g-1][jj][kk][c];
+          d[i2+g][j][k][c] = s[i1+ng-g-1][j][k][c];
   return 0;
 }
 
@@ -467,11 +457,11 @@ static int local_copy_south_to_north(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  for (int ii = i1; ii < i2; ++ii)
-    for (int kk = k1; kk < k2; ++kk)
+  for (int i = i1; i < i2; ++i)
+    for (int k = k1; k < k2; ++k)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          d[ii][j1-g-1][kk][c] = s[ii][j2-g-1][kk][c];
+          d[i][j1-g-1][k][c] = s[i][j2-g-1][k][c];
 
   return 0;
 }
@@ -499,11 +489,11 @@ static int local_copy_north_to_south(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  for (int ii = i1; ii < i2; ++ii)
-    for (int kk = k1; kk < k2; ++kk)
+  for (int i = i1; i < i2; ++i)
+    for (int k = k1; k < k2; ++k)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          d[ii][j2+g][kk][c] = s[ii][j1+ng-g-1][kk][c];
+          d[i][j2+g][k][c] = s[i][j1+ng-g-1][k][c];
 
   return 0;
 }
@@ -531,11 +521,11 @@ static int local_copy_below_to_above(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  for (int ii = i1; ii < i2; ++ii)
-    for (int jj = j1; jj < j2; ++jj)
+  for (int i = i1; i < i2; ++i)
+    for (int j = j1; j < j2; ++j)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          d[ii][jj][k1-g-1][c] = s[ii][jj][k2-g-1][c];
+          d[i][j][k1-g-1][c] = s[i][j][k2-g-1][c];
 
   return 0;
 }
@@ -563,11 +553,11 @@ static int local_copy_above_to_below(amr_grid_t* grid,
   int i1 = src->i1, i2 = src->i2, 
       j1 = src->j1, j2 = src->j2,
       k1 = src->k1, k2 = src->k2;
-  for (int ii = i1; ii < i2; ++ii)
-    for (int jj = j1; jj < j2; ++jj)
+  for (int i = i1; i < i2; ++i)
+    for (int j = j1; j < j2; ++j)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          d[ii][jj][k2+g][c] = s[ii][jj][k1+ng-g-1][c];
+          d[i][j][k2+g][c] = s[i][j][k1+ng-g-1][c];
 
   return 0;
 }
@@ -778,7 +768,7 @@ static void finish_remote_coarse_to_fine_interpolation(amr_grid_t* grid, int tok
 {
 }
 
-void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
+int amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
 {
   ASSERT(amr_grid_data_grid(data) == grid);
   ASSERT(ptr_array_empty(grid->ghost_filler_finishers));
@@ -801,11 +791,9 @@ void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
       // If this process has an asynchronous part, create a finisher for it.
       amr_grid_ghost_filler_finisher_t* finisher = polymec_malloc(sizeof(amr_grid_ghost_filler_finisher_t));
       finisher->token = token;
-      finisher->dest_patch = dest_patch;
       finisher->i_dest = starter->i_dest;
       finisher->j_dest = starter->j_dest;
       finisher->k_dest = starter->k_dest;
-      finisher->src_patch = src_patch;
       finisher->i_src = starter->i_src;
       finisher->j_src = starter->j_src;
       finisher->k_src = starter->k_src;
@@ -820,10 +808,13 @@ void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
   for (int i = 0; i < grid->ghost_filler_finishers->size; ++i)
   {
     amr_grid_ghost_filler_finisher_t* finisher = grid->ghost_filler_finishers->data[i];
+    amr_patch_t* dest_patch = amr_grid_data_patch(data, finisher->i_dest, finisher->j_dest, finisher->k_dest);
+    ASSERT(dest_patch != NULL);
+    amr_patch_t* src_patch = amr_grid_data_patch(data, finisher->i_src, finisher->j_src, finisher->k_src);
     finisher->method(grid, finisher->token, 
-                     finisher->dest_patch, 
+                     dest_patch, 
                      finisher->i_dest, finisher->j_dest, finisher->k_dest,
-                     finisher->src_patch, 
+                     src_patch, 
                      finisher->i_src, finisher->j_src, finisher->k_src);
   }
 
