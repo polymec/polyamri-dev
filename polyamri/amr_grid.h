@@ -126,7 +126,7 @@ int amr_grid_num_local_patches(amr_grid_t* grid);
 bool amr_grid_next_local_patch(amr_grid_t* grid, int* pos, int* i, int* j, int* k);
 
 // Returns true if the grid has a local patch at (i, j, k), false if not.
-bool amr_grid_has_patch(amr_grid_t* grid, int i, int j, int k);
+bool amr_grid_has_local_patch(amr_grid_t* grid, int i, int j, int k);
 
 // Queries the periodicity of the grid, placing booleans for the 
 // x, y, and z periodicity into the given (3-wide) periodicity array.
@@ -146,12 +146,14 @@ typedef struct amr_grid_data_t amr_grid_data_t;
 void amr_grid_fill_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
 
 // Begins an asynchronous ghost-cell-filling operation in the patches within 
-// the given grid data, communicating with other grids as needed. 
-void amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
+// the given grid data, communicating with other grids as needed. Returns an
+// integer token that can be used with amr_grid_finish_filling_ghosts, below.
+int amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
 
 // Concludes an asynchronous ghost-cell-filling operation initiated by 
-// a call to amr_grid_start_filling_ghosts().
-void amr_grid_finish_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data);
+// a call to amr_grid_start_filling_ghosts(), using the token returned by
+// that call.
+void amr_grid_finish_filling_ghosts(amr_grid_t* grid, int token);
 
 // Creates and returns an adjacency graph representing the connectivity of 
 // the patches within this AMR grid.
