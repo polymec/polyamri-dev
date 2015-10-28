@@ -52,7 +52,7 @@ static void patch_buffer_copy_in(patch_buffer_t* buffer, amr_grid_data_t* grid_d
 {
 }
 
-static void patch_buffer_transform(patch_buffer_t* buffer)
+static void patch_buffer_process(patch_buffer_t* buffer)
 {
 }
 
@@ -65,6 +65,7 @@ typedef struct
 {
   patch_buffer_t* buffer;
   amr_grid_data_t* grid_data;
+  MPI_Request request;
 } remote_data_t;
 
 struct amr_grid_t
@@ -107,7 +108,13 @@ struct amr_grid_t
   int_ptr_unordered_map_t* pending_data;
 };
 
-static patch_buffer_t* patch_buffer_new(amr_grid_t* grid, int num_components)
+static patch_buffer_t* local_patch_buffer_new(amr_grid_t* grid, int num_components)
+{
+  ASSERT(num_components > 0);
+  return NULL;
+}
+
+static patch_buffer_t* remote_patch_buffer_new(amr_grid_t* grid, int num_components)
 {
   ASSERT(num_components > 0);
   return NULL;
@@ -116,7 +123,7 @@ static patch_buffer_t* patch_buffer_new(amr_grid_t* grid, int num_components)
 static remote_data_t* remote_data_new(amr_grid_t* grid, amr_grid_data_t* grid_data)
 {
   remote_data_t* data = polymec_malloc(sizeof(remote_data_t));
-  data->buffer = patch_buffer_new(grid, amr_grid_data_num_components(grid_data));
+  data->buffer = remote_patch_buffer_new(grid, amr_grid_data_num_components(grid_data));
   data->grid_data = grid_data;
   return data;
 }
@@ -830,7 +837,7 @@ static void do_local_copies(amr_grid_t* grid, amr_grid_data_t* data)
   }
   if (grid->local_buffers->data[num_comp-1] == NULL)
   {
-    patch_buffer_t* new_buffer = patch_buffer_new(grid, num_comp);
+    patch_buffer_t* new_buffer = local_patch_buffer_new(grid, num_comp);
     ptr_array_assign_with_dtor(grid->local_buffers, num_comp-1, new_buffer, DTOR(patch_buffer_free));
   }
   patch_buffer_t* buffer = grid->local_buffers->data[num_comp-1];
@@ -839,7 +846,7 @@ static void do_local_copies(amr_grid_t* grid, amr_grid_data_t* data)
   patch_buffer_copy_in(buffer, data);
 
   // Copy and/or interpolate locally.
-  patch_buffer_transform(buffer);
+  patch_buffer_process(buffer);
 
   // Copy out.
   patch_buffer_copy_out(buffer, data);
@@ -847,41 +854,25 @@ static void do_local_copies(amr_grid_t* grid, amr_grid_data_t* data)
 
 static int start_remote_copies(amr_grid_t* grid, amr_grid_data_t* data)
 {
-  // Select the next available (non-negative) token.
+  // Make a new remote data thingy.
+  remote_data_t* remote_data = remote_data_new(grid, data);
+
+  // Copy the grid data into the thingy's patch buffer.
+  patch_buffer_t* buffer = remote_data->buffer;
+  patch_buffer_copy_in(buffer, data);
+
+  // Initiate the data transfer.
+  MPI_Ineighbor_alltoallv(buffer->send_data, buffer->send_counts, buffer->send_offsets, buffer->send_type,
+                          buffer->receive_data, buffer->receive_counts, buffer->receive_offsets, buffer->receive_type,
+                          grid->ghost_comm, remote_data->request);
+
+  // Stash the remote data into our set of pending data using a token.
   int token = 0;
   while (int_ptr_unordered_map_contains(grid->pending_data, token))
     ++token;
-
-  // Make a new remote data thingy.
-  int_ptr_unordered_map_insert_with_v_dtor(grid->pending_data, token, data, DTOR(remote_data_free));
-  remote_data_t* remote_data = remote_data_new(grid, data);
-
-  // Copy the data into the thingy's patch buffer.
-  patch_buffer_copy_in(remote_data->buffer, remote_data->grid_data);
-
-  // Initiate the data transfer.
-  // FIXME
+  int_ptr_unordered_map_insert_with_v_dtor(grid->pending_data, token, remote_data, DTOR(remote_data_free));
 
   return token;
-}
-
-static void finish_remote_copies(amr_grid_t* grid, int token)
-{
-  remote_data_t** remote_data_p = (remote_data_t**)int_ptr_unordered_map_get(grid->pending_data, token);
-  ASSERT(remote_data_p != NULL)
-  remote_data_t* remote_data = *remote_data_p;
-
-  // Finish up the data transfer.
-  // FIXME
-  
-  // Interpolate / transform as necessary.
-  patch_buffer_transform(remote_data->buffer);
-
-  // Copy the data into place.
-  patch_buffer_copy_out(remote_data->buffer, remote_data->grid_data);
-  
-  // Dispose of the remote data for this token.
-  int_ptr_unordered_map_delete(grid->pending_data, token);
 }
 
 int amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
@@ -895,59 +886,31 @@ int amr_grid_start_filling_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
   do_local_copies(grid, data);
 
   return token;
+}
 
-#if 0
-  // Go through our list of starters and tick them off.
-  for (int i = 0; i < grid->ghost_filler_starters->size; ++i)
-  {
-    // Start the process of filling the ghost cells.
-    amr_grid_ghost_filler_starter_t* starter = grid->ghost_filler_starters->data[i];
-    amr_patch_t* dest_patch = amr_grid_data_patch(data, starter->i_dest, starter->j_dest, starter->k_dest);
-    ASSERT(dest_patch != NULL);
-    amr_patch_t* src_patch = amr_grid_data_patch(data, starter->i_src, starter->j_src, starter->k_src);
-    int token = starter->method(grid, 
-                                dest_patch, 
-                                starter->i_dest, starter->j_dest, starter->k_dest,
-                                src_patch, 
-                                starter->i_src, starter->j_src, starter->k_src);
-    if (token != -1)
-    {
-      // If this process has an asynchronous part, create a finisher for it.
-      amr_grid_ghost_filler_finisher_t* finisher = polymec_malloc(sizeof(amr_grid_ghost_filler_finisher_t));
-      finisher->token = token;
-      finisher->i_dest = starter->i_dest;
-      finisher->j_dest = starter->j_dest;
-      finisher->k_dest = starter->k_dest;
-      finisher->i_src = starter->i_src;
-      finisher->j_src = starter->j_src;
-      finisher->k_src = starter->k_src;
-      ptr_array_append_with_dtor(grid->ghost_filler_finishers, finisher, polymec_free);
-    }
-  }
-#endif
+static void finish_remote_copies(amr_grid_t* grid, int token)
+{
+  remote_data_t** remote_data_p = (remote_data_t**)int_ptr_unordered_map_get(grid->pending_data, token);
+  ASSERT(remote_data_p != NULL)
+  remote_data_t* remote_data = *remote_data_p;
+
+  // Finish up the data transfer.
+  MPI_Status status;
+  MPI_Waitall(1, &remote->request, &status);
+  
+  // Interpolate / transform as necessary.
+  patch_buffer_process(remote_data->buffer);
+
+  // Copy the data into place.
+  patch_buffer_copy_out(remote_data->buffer, remote_data->grid_data);
+  
+  // Dispose of the remote data for this token.
+  int_ptr_unordered_map_delete(grid->pending_data, token);
 }
 
 void amr_grid_finish_filling_ghosts(amr_grid_t* grid, int token)
 {
   finish_remote_copies(grid, token);
-#if 0
-  // Go through our existing list of "finishers."
-  for (int i = 0; i < grid->ghost_filler_finishers->size; ++i)
-  {
-    amr_grid_ghost_filler_finisher_t* finisher = grid->ghost_filler_finishers->data[i];
-    amr_patch_t* dest_patch = amr_grid_data_patch(data, finisher->i_dest, finisher->j_dest, finisher->k_dest);
-    ASSERT(dest_patch != NULL);
-    amr_patch_t* src_patch = amr_grid_data_patch(data, finisher->i_src, finisher->j_src, finisher->k_src);
-    finisher->method(grid, finisher->token, 
-                     dest_patch, 
-                     finisher->i_dest, finisher->j_dest, finisher->k_dest,
-                     src_patch, 
-                     finisher->i_src, finisher->j_src, finisher->k_src);
-  }
-
-  // Clear the list.
-  ptr_array_clear(grid->ghost_filler_finishers);
-#endif
 }
 
 void amr_grid_fill_ghosts(amr_grid_t* grid, amr_grid_data_t* data)
