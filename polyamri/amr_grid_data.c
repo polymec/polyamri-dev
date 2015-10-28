@@ -12,6 +12,8 @@ struct amr_grid_data_t
   amr_grid_t* grid;
   int nx, ny, nz, nc;
   void* patches;
+
+  int token;
 };
 
 // Multi-dimensional array accessors for patches.
@@ -41,6 +43,7 @@ amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, int num_components)
   while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
     patches[i][j][k] = amr_patch_new(px, py, pz, num_components, ng);
 
+  grid_data->token = -1; // No data in flight.
   return grid_data;
 }
 
@@ -94,11 +97,16 @@ void amr_grid_data_fill_ghosts(amr_grid_data_t* grid_data)
 
 void amr_grid_data_start_filling_ghosts(amr_grid_data_t* grid_data)
 {
-  amr_grid_start_filling_ghosts(grid_data->grid, grid_data);
+  ASSERT(grid_data->token == -1);
+  grid_data->token = amr_grid_start_filling_ghosts(grid_data->grid, grid_data);
 }
 
 void amr_grid_data_finish_filling_ghosts(amr_grid_data_t* grid_data)
 {
-  amr_grid_finish_filling_ghosts(grid_data->grid, grid_data);
+  if (grid_data->token != -1)
+  {
+    amr_grid_finish_filling_ghosts(grid_data->grid, grid_data->token);
+    grid_data->token = -1;
+  }
 }
 
