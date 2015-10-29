@@ -244,9 +244,9 @@ void silo_file_write_amr_grid(silo_file_t* file,
   // concerned.
   DBSetDir(dbfile, "/");
   int num_local_patches = amr_grid_num_local_patches(grid);
-  int npx, npy, npz, nx, ny, nz, ng;
+  int npx, npy, npz, nx, ny, nz;
   amr_grid_get_extents(grid, &npx, &npy, &npz);
-  amr_grid_get_patch_size(grid, &nx, &ny, &nz, &ng);
+  amr_grid_get_patch_size(grid, &nx, &ny, &nz);
 
   char* patch_grid_names[num_local_patches];
   int patch_grid_types[num_local_patches];
@@ -295,9 +295,9 @@ void silo_file_write_amr_grid_data(silo_file_t* file,
   int num_components = amr_grid_data_num_components(grid_data);
 
   amr_grid_t* grid = amr_grid_data_grid(grid_data);
-  int npx, npy, npz, nx, ny, nz, ng;
+  int npx, npy, npz, nx, ny, nz;
   amr_grid_get_extents(grid, &npx, &npy, &npz);
-  amr_grid_get_patch_size(grid, &nx, &ny, &nz, &ng);
+  amr_grid_get_patch_size(grid, &nx, &ny, &nz);
 
   char* field_names[num_components];
   char* multi_field_names[num_components][num_local_patches];

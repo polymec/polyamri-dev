@@ -23,7 +23,7 @@ typedef struct amr_grid_hierarchy_t amr_grid_hierarchy_t;
 amr_grid_hierarchy_t* amr_grid_hierarchy_new(MPI_Comm comm,
                                              int nx, int ny, int nz, 
                                              int px, int py, int pz,
-                                             int num_ghosts, int ref_ratio,
+                                             int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
                                              amr_grid_interpolator_t* interpolator);
 
@@ -39,9 +39,6 @@ void amr_grid_hierarchy_set_comm(amr_grid_hierarchy_t* hierarchy, MPI_Comm comm)
 
 // Returns the current number of grid levels.
 int amr_grid_hierarchy_num_levels(amr_grid_hierarchy_t* hierarchy);
-
-// Returns the number of ghost cells in the tiles within this grid hierarchy.
-int amr_grid_hierarchy_num_ghosts(amr_grid_hierarchy_t* hierarchy);
 
 // Returns the refinement ratio between grid levels.
 int amr_grid_hierarchy_ref_ratio(amr_grid_hierarchy_t* hierarchy);

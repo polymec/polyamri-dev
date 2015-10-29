@@ -10,7 +10,8 @@
 struct amr_grid_data_t
 {
   amr_grid_t* grid;
-  int nx, ny, nz, nc;
+  amr_grid_data_centering_t centering;
+  int nx, ny, nz, nc, ng;
   void* patches;
 
   int token;
@@ -20,9 +21,13 @@ struct amr_grid_data_t
 #define DECLARE_PATCH_ARRAY(array, grid_data) \
 amr_patch_t* (*array)[grid_data->nx][grid_data->ny] = grid_data->patches
 
-amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, int num_components)
+amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, 
+                                   amr_grid_data_centering_t centering,
+                                   int num_components,
+                                   int num_ghosts)
 {
   ASSERT(num_components > 0);
+  ASSERT(num_ghosts >= 0);
 
   // Allocate storage.
   int num_local_patches = amr_grid_num_local_patches(grid);
@@ -30,18 +35,59 @@ amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, int num_components)
   size_t grid_data_size = sizeof(amr_grid_data_t) + patches_size;
   amr_grid_data_t* grid_data = polymec_malloc(grid_data_size);
   grid_data->grid = grid;
+  grid_data->centering = centering;
   grid_data->nc = num_components;
+  grid_data->ng = num_ghosts;
   amr_grid_get_extents(grid, &grid_data->nx, &grid_data->ny, &grid_data->nz);
   grid_data->patches = (char*)grid_data + sizeof(amr_grid_data_t);
   memset(grid_data->patches, 0, patches_size);
 
   // Now populate the patches.
-  int px, py, pz, ng;
-  amr_grid_get_patch_size(grid, &px, &py, &pz, &ng);
+  int px, py, pz;
+  amr_grid_get_patch_size(grid, &px, &py, &pz);
   DECLARE_PATCH_ARRAY(patches, grid_data);
   int pos = 0, i, j, k;
-  while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
-    patches[i][j][k] = amr_patch_new(px, py, pz, num_components, ng);
+  if (centering == AMR_GRID_CELL)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px, py, pz, num_components, num_ghosts);
+  }
+  else if (centering == AMR_GRID_X_FACE)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px+1, py, pz, num_components, num_ghosts);
+  }
+  else if (centering == AMR_GRID_Y_FACE)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px, py+1, pz, num_components, num_ghosts);
+  }
+  else if (centering == AMR_GRID_Z_FACE)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px, py, pz+1, num_components, num_ghosts);
+  }
+  else if (centering == AMR_GRID_X_EDGE)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px, py+1, pz+1, num_components, num_ghosts);
+  }
+  else if (centering == AMR_GRID_Y_EDGE)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px+1, py, pz+1, num_components, num_ghosts);
+  }
+  else if (centering == AMR_GRID_Z_EDGE)
+  {
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px+1, py+1, pz, num_components, num_ghosts);
+  }
+  else
+  {
+    ASSERT(centering == AMR_GRID_NODE);
+    while (amr_grid_next_local_patch(grid, &pos, &i, &j, &k))
+      patches[i][j][k] = amr_patch_new(px+1, py+1, pz+1, num_components, num_ghosts);
+  }
 
   grid_data->token = -1; // No data in flight.
   return grid_data;
@@ -54,6 +100,16 @@ void amr_grid_data_free(amr_grid_data_t* grid_data)
   while (amr_grid_data_next_local_patch(grid_data, &pos, &i, &j, &k, &patch))
     amr_patch_free(patch);
   polymec_free(grid_data);
+}
+
+amr_grid_data_centering_t amr_grid_data_centering(amr_grid_data_t* grid_data)
+{
+  return grid_data->centering;
+}
+
+int amr_grid_data_num_ghosts(amr_grid_data_t* grid_data)
+{
+  return grid_data->ng;
 }
 
 int amr_grid_data_num_components(amr_grid_data_t* grid_data)

@@ -16,15 +16,37 @@
 // with an amr_grid in 3D space.
 typedef struct amr_grid_data_t amr_grid_data_t;
 
-// Creates an amr_grid_data object with the given number of components, 
-// associated with the given amr_grid.
-amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, int num_components);
+// This type identifies where values are stored for a given amr_grid_data object.
+typedef enum
+{
+  AMR_GRID_CELL = 0,
+  AMR_GRID_X_FACE = 1,
+  AMR_GRID_Y_FACE = 2,
+  AMR_GRID_Z_FACE = 3,
+  AMR_GRID_X_EDGE = 4,
+  AMR_GRID_Y_EDGE = 5,
+  AMR_GRID_Z_EDGE = 6,
+  AMR_GRID_NODE = 7
+} amr_grid_data_centering_t;
+
+// Creates an amr_grid_data object associated with the given amr_grid, with values
+// on the given centering, and with the given number of components, 
+amr_grid_data_t* amr_grid_data_new(amr_grid_t* grid, 
+                                   amr_grid_data_centering_t centering,
+                                   int num_components, 
+                                   int num_ghosts);
 
 // Frees the given amr_grid_data object.
 void amr_grid_data_free(amr_grid_data_t* grid_data);
 
+// Returns the centering of the data for this object.
+amr_grid_data_centering_t amr_grid_data_centering(amr_grid_data_t* grid_data);
+
 // Returns the number of data components in the amr_grid_data object.
 int amr_grid_data_num_components(amr_grid_data_t* grid_data);
+
+// Returns the number of ghost layers in the amr_grid_data object.
+int amr_grid_data_num_ghosts(amr_grid_data_t* grid_data);
 
 // Returns the number of local patches in the amr_grid_data object.
 int amr_grid_data_num_local_patches(amr_grid_data_t* grid_data);
@@ -44,14 +66,14 @@ bool amr_grid_data_next_local_patch(amr_grid_data_t* grid_data, int* pos,
                                     int* i, int* j, int* k, 
                                     amr_patch_t** patch);
 
-// Fills all ghost cells in the amr_grid_data's patches.
+// Fills all ghost values in the amr_grid_data's patches.
 void amr_grid_data_fill_ghosts(amr_grid_data_t* grid_data);
 
-// Begins an asynchronous ghost-cell-filling operation.
+// Begins an asynchronous ghost-filling operation.
 // communicating with other grids as needed. 
 void amr_grid_data_start_filling_ghosts(amr_grid_data_t* grid_data);
 
-// Concludes an asynchronous ghost-cell-filling operation initiated by 
+// Concludes an asynchronous ghost-filling operation initiated by 
 // a call to amr_grid_data_start_filling_ghosts().
 void amr_grid_data_finish_filling_ghosts(amr_grid_data_t* grid_data);
 

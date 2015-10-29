@@ -20,7 +20,8 @@ typedef struct amr_data_hierarchy_t amr_data_hierarchy_t;
 // The lifetime of the data hierarchy (and the validity of its data) is tied 
 // to that of the grid hierarchy, though the two objects are managed separately.
 amr_data_hierarchy_t* amr_data_hierarchy_new(amr_grid_hierarchy_t* grids,
-                                             int num_components);
+                                             int num_components,
+                                             int num_ghosts);
 
 // Destroys the given data hierarchy and all of its levels.
 void amr_data_hierarchy_free(amr_data_hierarchy_t* data);
@@ -30,6 +31,9 @@ amr_grid_hierarchy_t* amr_data_hierarchy_grids(amr_data_hierarchy_t* data);
 
 // Returns the number of components for the data within this hierarchy.
 int amr_data_hierarchy_num_components(amr_data_hierarchy_t* data);
+
+// Returns the number of ghost layers for the data within this hierarchy.
+int amr_data_hierarchy_num_ghosts(amr_data_hierarchy_t* data);
 
 // Returns the current number of grid levels.
 int amr_data_hierarchy_num_levels(amr_data_hierarchy_t* data);

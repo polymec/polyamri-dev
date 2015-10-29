@@ -37,8 +37,8 @@ void test_write_amr_patch(void** state)
 void test_write_amr_grid(void** state) 
 { 
   // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
-  // no ghosts, and no periodicity.
-  amr_grid_t* grid = amr_grid_new(MPI_COMM_SELF, 4, 4, 4, 10, 10, 10, 0, false, false, false); 
+  // and no periodicity.
+  amr_grid_t* grid = amr_grid_new(MPI_COMM_SELF, 4, 4, 4, 10, 10, 10, false, false, false); 
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)
@@ -55,16 +55,16 @@ void test_write_amr_grid(void** state)
 void test_write_amr_grid_data(void** state) 
 { 
   // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
-  // no ghosts, and no periodicity.
-  amr_grid_t* grid = amr_grid_new(MPI_COMM_SELF, 4, 4, 4, 10, 10, 10, 0, false, false, false); 
+  // and no periodicity.
+  amr_grid_t* grid = amr_grid_new(MPI_COMM_SELF, 4, 4, 4, 10, 10, 10, false, false, false); 
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)
         amr_grid_add_local_patch(grid, i, j, k);
   amr_grid_finalize(grid);
 
-  // Make a 4-component solution on this grid.
-  amr_grid_data_t* solution = amr_grid_data_new(grid, 4);
+  // Make a 4-component solution on this grid (no ghosts).
+  amr_grid_data_t* solution = amr_grid_data_new(grid, AMR_GRID_CELL, 4, 0);
   
   // Fill it with goodness.
   int pos = 0, I, J, K;

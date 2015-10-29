@@ -11,7 +11,7 @@
 struct amr_grid_hierarchy_t 
 {
   int nx, ny, nz, px, py, pz;
-  int num_ghosts, ref_ratio;
+  int ref_ratio;
   bool x_periodic, y_periodic, z_periodic;
   amr_grid_interpolator_t* interpolator;
   ptr_array_t* levels;
@@ -21,7 +21,7 @@ struct amr_grid_hierarchy_t
 amr_grid_hierarchy_t* amr_grid_hierarchy_new(MPI_Comm comm,
                                              int nx, int ny, int nz, 
                                              int px, int py, int pz,
-                                             int num_ghosts, int ref_ratio,
+                                             int ref_ratio,
                                              bool periodic_in_x, bool periodic_in_y, bool periodic_in_z,
                                              amr_grid_interpolator_t* interpolator)
 {
@@ -31,13 +31,11 @@ amr_grid_hierarchy_t* amr_grid_hierarchy_new(MPI_Comm comm,
   ASSERT(px > 0);
   ASSERT(py > 0);
   ASSERT(pz > 0);
-  ASSERT(num_ghosts >= 0);
   ASSERT((ref_ratio % 2) == 0); // FIXME: Not good enough!
 
   amr_grid_hierarchy_t* hierarchy = malloc(sizeof(amr_grid_hierarchy_t));
   hierarchy->nx = nx, hierarchy->ny = ny, hierarchy->nz = nz;
   hierarchy->px = px, hierarchy->py = py, hierarchy->pz = pz;
-  hierarchy->num_ghosts = num_ghosts;
   hierarchy->ref_ratio = ref_ratio;
   hierarchy->x_periodic = periodic_in_x;
   hierarchy->y_periodic = periodic_in_y;
@@ -68,11 +66,6 @@ int amr_grid_hierarchy_num_levels(amr_grid_hierarchy_t* hierarchy)
   return hierarchy->levels->size;
 }
 
-int amr_grid_hierarchy_num_ghosts(amr_grid_hierarchy_t* hierarchy)
-{
-  return hierarchy->num_ghosts;
-}
-
 int amr_grid_hierarchy_ref_ratio(amr_grid_hierarchy_t* hierarchy)
 {
   return hierarchy->ref_ratio;
@@ -100,7 +93,7 @@ amr_grid_t* amr_grid_hierarchy_add_level(amr_grid_hierarchy_t* hierarchy)
     nz *= ref_ratio;
   }
   amr_grid_t* new_level = amr_grid_new(hierarchy->comm, nx, ny, nz,
-                                       px, py, pz, hierarchy->num_ghosts,
+                                       px, py, pz, 
                                        hierarchy->x_periodic, 
                                        hierarchy->y_periodic, 
                                        hierarchy->z_periodic);

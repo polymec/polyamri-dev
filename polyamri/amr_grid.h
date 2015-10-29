@@ -43,12 +43,11 @@ typedef enum
 //------------------------------------------------------------------------
 
 // Creates a new empty grid level defined on the region filling [0,1]x[0,1]x[0,1]
-// with nx x ny x nz patches of size px x py x pz. Each patch has the given 
-// number of ghost cells. This grid is not associated with any other grids.
+// with nx x ny x nz patches of size px x py x pz. This grid is not associated 
+// with any other grids.
 amr_grid_t* amr_grid_new(MPI_Comm comm,
                          int nx, int ny, int nz, 
                          int px, int py, int pz,
-                         int num_ghosts,
                          bool periodic_in_x, 
                          bool periodic_in_y, 
                          bool periodic_in_z);
@@ -113,9 +112,8 @@ void amr_grid_finalize(amr_grid_t* grid);
 void amr_grid_get_extents(amr_grid_t* grid, int* nx, int* ny, int* nz);
 
 // Fetches the number of cells in each patch on this grid in the x, y, and z 
-// directions, placing them in pnx, pny, pnz. Additionally, the number of ghost 
-// cells is placed in png.
-void amr_grid_get_patch_size(amr_grid_t* grid, int* pnx, int* pny, int* pnz, int* png);
+// directions, placing them in pnx, pny, pnz.
+void amr_grid_get_patch_size(amr_grid_t* grid, int* pnx, int* pny, int* pnz);
 
 // Returns the number of patches that can be stored locally on this grid.
 int amr_grid_num_local_patches(amr_grid_t* grid);

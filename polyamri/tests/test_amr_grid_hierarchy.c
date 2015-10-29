@@ -16,9 +16,8 @@
 void test_ctor(void** state) 
 {
   amr_grid_interpolator_t* I = static_linear_amr_grid_interpolator_new();
-  amr_grid_hierarchy_t* h = amr_grid_hierarchy_new(MPI_COMM_SELF, 4, 4, 4, 16, 16, 16, 1, 2, false, false, false, I);
+  amr_grid_hierarchy_t* h = amr_grid_hierarchy_new(MPI_COMM_SELF, 4, 4, 4, 16, 16, 16, 2, false, false, false, I);
   assert_int_equal(0, amr_grid_hierarchy_num_levels(h));
-  assert_int_equal(1, amr_grid_hierarchy_num_ghosts(h));
   assert_int_equal(2, amr_grid_hierarchy_ref_ratio(h));
   bool periodicity[3];
   amr_grid_hierarchy_get_periodicity(h, periodicity);

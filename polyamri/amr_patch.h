@@ -17,7 +17,7 @@
 // within the data array, e.g. p->data[i][j][k][c].
 //
 // The index space is bounded by [i1, i2-1] in the "i" direction, [j1, j2-1]
-// in the "j" direction, and [k1, k2-1] in the "k" direction. Ghost cells pad 
+// in the "j" direction, and [k1, k2-1] in the "k" direction. Ghost values pad 
 // these indices on either side.
 typedef struct 
 {
@@ -30,7 +30,7 @@ typedef struct
   // The start and end indices in i, j, k for the patch.
   int i1, i2, j1, j2, k1, k2;
 
-  // The number of ghost cells.
+  // The number of ghost values.
   int ng;
 } amr_patch_t;
 
