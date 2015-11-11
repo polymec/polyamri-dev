@@ -17,5 +17,5 @@ install(TARGETS polyamri DESTINATION lib)
 
 # Install headers, including generated files.
 file(GLOB HEADERS *.h)
-install(FILES ${HEADERS} DESTINATION include/polyamri)
+install(FILES ${HEADERS} DESTINATION include/polymec/polyamri)
 
