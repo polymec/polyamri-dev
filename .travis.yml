@@ -38,7 +38,6 @@ addons:
     acl: public_read
 
 after_success: 
-  - cd $HOME
   - mkdir -p latest 
   - tar czvf polyamri-$CC-debug=$DEBUG-mpi=$MPI.tar.gz polymec-$CC-debug=$DEBUG-mpi=$MPI/* 
   - mv polyamri-$CC-debug=$DEBUG-mpi=$MPI.tar.gz latest
