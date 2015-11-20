@@ -11,10 +11,11 @@
 #include "core/polymec_version.h"
 #include "polyamri/polyamri.h"
 
-// We use some fancy MPI-3 stuff in this here library.
-#if MPI_VERSION < 3
-#error "MPI-3 is required for polyamri."
-#endif
+// We're not relying on MPI-3 just yet.
+//// We use some fancy MPI-3 stuff in this here library.
+//#if MPI_VERSION < 3
+//#error "MPI-3 is required for polyamri."
+//#endif
 
 // The major version of polyamri must match that of polymec.
 #if POLYMEC_MAJOR_VERSION != POLYAMRI_MAJOR_VERSION
