@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <string.h>
-#include "cmockery.h"
+#include "cmocka.h"
 #include "polyamri/amr_patch.h"
 
 void test_amr_patch_without_ghosts(void** state) 
@@ -54,10 +54,10 @@ void test_amr_patch_with_ghosts(void** state)
 int main(int argc, char* argv[]) 
 {
   polymec_init(argc, argv);
-  const UnitTest tests[] = 
+  const struct CMUnitTest tests[] = 
   {
-    unit_test(test_amr_patch_without_ghosts),
-    unit_test(test_amr_patch_with_ghosts)
+    cmocka_unit_test(test_amr_patch_without_ghosts),
+    cmocka_unit_test(test_amr_patch_with_ghosts)
   };
-  return run_tests(tests);
+  return cmocka_run_group_tests(tests, NULL, NULL);
 }

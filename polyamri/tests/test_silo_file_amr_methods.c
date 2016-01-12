@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <string.h>
-#include "cmockery.h"
+#include "cmocka.h"
 #include "polyamri/silo_file_amr_methods.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
 
@@ -93,11 +93,11 @@ void test_write_amr_grid_data(void** state)
 int main(int argc, char* argv[]) 
 {
   polymec_init(argc, argv);
-  const UnitTest tests[] = 
+  const struct CMUnitTest tests[] = 
   {
-    unit_test(test_write_amr_patch),
-    unit_test(test_write_amr_grid),
-    unit_test(test_write_amr_grid_data)
+    cmocka_unit_test(test_write_amr_patch),
+    cmocka_unit_test(test_write_amr_grid),
+    cmocka_unit_test(test_write_amr_grid_data)
   };
-  return run_tests(tests);
+  return cmocka_run_group_tests(tests, NULL, NULL);
 }
