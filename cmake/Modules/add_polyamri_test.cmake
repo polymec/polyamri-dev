@@ -1,7 +1,7 @@
-# This function adds a (serial) unit test executable to be built using cmockery.
+# This function adds a (serial) unit test executable to be built using cmocka.
 function(add_polyamri_test exe)
   add_executable(${exe} ${ARGN})
-  target_link_libraries(${exe} cmockery ${POLYAMRI_LIBRARIES})
+  target_link_libraries(${exe} cmocka ${POLYAMRI_LIBRARIES})
   set_target_properties(${exe} PROPERTIES COMPILE_FLAGS "-DCMAKE_CURRENT_SOURCE_DIR=\\\"${CMAKE_CURRENT_SOURCE_DIR}\\\"")
   add_test(${exe} ${exe})
   set_tests_properties(${exe} PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
