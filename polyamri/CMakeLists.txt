@@ -1,5 +1,8 @@
 # Library.
-add_library(polyamri polyamri.c amr_patch.c amr_grid.c amr_grid_data.c
+add_library(polyamri polyamri.c 
+            str_grid_patch.c str_grid_patch_filler.c str_grid.c
+            str_grid_cell_data.c
+            amr_patch.c amr_grid.c amr_grid_data.c
             amr_grid_interpolator.c amr_grid_hierarchy.c amr_data_hierarchy.c 
             amr_grid_assembly.c grid_to_bbox_coord_mapping.c
             partition_amr_grid.c
