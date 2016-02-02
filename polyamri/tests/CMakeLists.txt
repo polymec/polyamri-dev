@@ -1,8 +1,7 @@
 include(add_polyamri_test)
 
-#add_polyamri_test(test_amr_patch test_amr_patch.c)
-#add_polyamri_test(test_amr_grid test_amr_grid.c)
-#add_polyamri_test(test_amr_grid_data test_amr_grid_data.c)
-#add_polyamri_test(test_amr_grid_hierarchy test_amr_grid_hierarchy.c)
-#add_polyamri_test(test_silo_file_amr_methods test_silo_file_amr_methods.c)
+add_polyamri_test(test_str_grid_patch test_str_grid_patch.c)
+add_polyamri_test(test_str_grid test_str_grid.c)
+#add_polyamri_test(test_str_grid_cell_data test_str_grid_cell_data.c)
+add_polyamri_test(test_silo_file_str_methods test_silo_file_str_methods.c)
 
