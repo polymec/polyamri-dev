@@ -9,7 +9,7 @@
 #include "core/unordered_set.h"
 #include "core/unordered_map.h"
 #include "polyamri/str_grid.h"
-#include "polyamri/str_grid_cell_data.h"
+#include "polyamri/str_grid_patch_filler.h"
 
 struct str_grid_t
 {
@@ -202,13 +202,15 @@ int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* d
   {
     int i, j, k;
     get_patch_indices(grid, patch_index, &i, &j, &k);
-    str_grid_patch_t* patch = str_grid_cell_data_patch(data, i, j, k);
-    ASSERT(patch != NULL);
-    int op_token = str_grid_patch_filler_start(filler, patch);
+    int op_token = str_grid_patch_filler_start(filler, i, j, k, data);
+    ASSERT((op_token >= 0) || (op_token == -1));
 
-    // We stash both the patch index and the op token.
-    int_array_append(op_tokens, patch_index);
-    int_array_append(op_tokens, op_token);
+    if (op_token != -1) // No finish operation.
+    {
+      // We stash both the patch index and the op token.
+      int_array_append(op_tokens, patch_index);
+      int_array_append(op_tokens, op_token);
+    }
   }
 
   return token;
@@ -227,6 +229,7 @@ void str_grid_finish_filling_ghost_cells(str_grid_t* grid, int token)
   {
     int patch_index = op_tokens->data[2*n];
     int op_token = op_tokens->data[2*n+1];
+    ASSERT(op_token >= 0);
     str_grid_patch_filler_t* filler = (str_grid_patch_filler_t*)(*int_ptr_unordered_map_get(grid->patch_fillers, patch_index));
     str_grid_patch_filler_finish(filler, op_token);
   }

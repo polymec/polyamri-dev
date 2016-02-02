@@ -34,6 +34,17 @@ typedef struct
   int ng;
 } str_grid_patch_t;
 
+// This type identifies the six different logical patch boundaries.
+typedef enum
+{
+  STR_GRID_PATCH_X1_BOUNDARY,
+  STR_GRID_PATCH_X2_BOUNDARY,
+  STR_GRID_PATCH_Y1_BOUNDARY,
+  STR_GRID_PATCH_Y2_BOUNDARY,
+  STR_GRID_PATCH_Z1_BOUNDARY,
+  STR_GRID_PATCH_Z2_BOUNDARY
+} str_grid_patch_boundary_t;
+
 // This macro generates a multidimensional array that can access the given
 // patch's data using C99 variable-length arrays.
 // Note that patch->i1 + tile->i2 == (patch->i2 - tile->i1) + 2 * num_ghosts.

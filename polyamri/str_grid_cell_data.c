@@ -59,6 +59,7 @@ str_grid_cell_data_t* str_grid_cell_data_new(str_grid_t* grid,
 void str_grid_cell_data_free(str_grid_cell_data_t* cell_data)
 {
   int_ptr_unordered_map_free(cell_data->patches);
+  polymec_free(cell_data);
 }
 
 int str_grid_cell_data_num_components(str_grid_cell_data_t* cell_data)

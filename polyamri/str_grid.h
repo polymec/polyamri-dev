@@ -9,12 +9,25 @@
 #define POLYAMRI_STR_GRID_H
 
 #include "polyamri/str_grid_patch.h"
-#include "polyamri/str_grid_patch_filler.h"
+
+// This type is used to fill ghost cells in patches.
+typedef struct str_grid_patch_filler_t str_grid_patch_filler_t;
 
 // A structured grid is three-dimensional logically rectangular grid. It 
 // consists of a set of uniformly-sized patches. The grid manages
 // these patches and their connectivity.
 typedef struct str_grid_t str_grid_t;
+
+// This type identifies the six different logical grid boundaries.
+typedef enum
+{
+  STR_GRID_X1_BOUNDARY,
+  STR_GRID_X2_BOUNDARY,
+  STR_GRID_Y1_BOUNDARY,
+  STR_GRID_Y2_BOUNDARY,
+  STR_GRID_Z1_BOUNDARY,
+  STR_GRID_Z2_BOUNDARY
+} str_grid_boundary_t;
 
 //------------------------------------------------------------------------
 //                          Construction methods

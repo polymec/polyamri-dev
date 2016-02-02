@@ -42,8 +42,7 @@ str_grid_t* str_grid_cell_data_grid(str_grid_cell_data_t* cell_data);
 str_grid_patch_t* str_grid_cell_data_patch(str_grid_cell_data_t* cell_data, int i, int j, int k);
 
 // Traverses the grid data, returning true if a patch was found and false if not.
-// Set *pos to 0 to reset the traversal. Pointers to the patch and its 
-// bounding box are returned in the given locations.
+// Set *pos to 0 to reset the traversal. patch is set to the cell patch.
 bool str_grid_cell_data_next_patch(str_grid_cell_data_t* cell_data, int* pos, 
                                    int* i, int* j, int* k, 
                                    str_grid_patch_t** patch);
