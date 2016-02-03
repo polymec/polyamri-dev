@@ -27,7 +27,7 @@ struct str_grid_assembly_t
 
 str_grid_assembly_t* str_grid_assembly_new()
 {
-  str_grid_assembly_t* assembly = str_grid_assembly_new();
+  str_grid_assembly_t* assembly = polymec_malloc(sizeof(str_grid_assembly_t));
   assembly->blocks = string_ptr_unordered_map_new();
   return assembly;
 }
@@ -52,7 +52,7 @@ void str_grid_assembly_add_block(str_grid_assembly_t* assembly,
   memset(entry->neighbors, 0, sizeof(str_grid_t*) * 6);
   string_ptr_unordered_map_insert_with_kv_dtors(assembly->blocks, 
                                                 string_dup(block_name), 
-                                                block,
+                                                entry,
                                                 string_free,
                                                 DTOR(block_entry_free));
 }
