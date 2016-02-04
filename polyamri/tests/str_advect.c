@@ -324,9 +324,9 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
       {
         for (int k = 0; k < adv->nz; ++k)
         {
-          real_t div_F = Ax * (Fx[i+1][j+1][k+1][0] - Fx[i][j][k][0]) + 
-                         Ay * (Fy[i+1][j+1][k+1][0] - Fy[i][j][k][0]) + 
-                         Az * (Fz[i+1][j+1][k+1][0] - Fz[i][j][k][0]);
+          real_t div_F = Ax * (Fx[i+1][j][k][0] - Fx[i][j][k][0]) + 
+                         Ay * (Fy[i][j+1][k][0] - Fy[i][j][k][0]) + 
+                         Az * (Fz[i][j][k+1][0] - Fz[i][j][k][0]);
           U[i][j][k][0] -= max_dt * div_F / V;
         }
       }
