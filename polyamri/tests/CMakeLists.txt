@@ -6,3 +6,5 @@ add_polyamri_test(test_str_grid test_str_grid.c)
 add_polyamri_test(test_str_grid_assembly test_str_grid_assembly.c)
 add_polyamri_test(test_silo_file_str_methods test_silo_file_str_methods.c)
 
+include(add_polyamri_executable)
+add_polyamri_executable(str_advect str_advect.c)
