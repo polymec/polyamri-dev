@@ -26,7 +26,6 @@ typedef struct
   // State information.
   str_grid_t* grid;
   str_grid_cell_data_t* U;
-  str_grid_face_data_t* F;
 
   // Initial state.
   st_func_t* U0;
@@ -34,8 +33,11 @@ typedef struct
   // Velocity field.
   st_func_t* V;
 
-  // Time integrator.
+  // Time integrator and work vectors.
   str_ode_integrator_t* integ;
+  str_grid_cell_data_t* U_work;
+  str_grid_cell_data_t* dUdt_work;
+  str_grid_face_data_t* F_work;
 } advect_t;
 
 static const char advect_desc[] = "PolyAMRI advection (str_advect)\n"
@@ -79,7 +81,11 @@ static void advect_init(void* context, real_t t)
                            adv->nx, adv->ny, adv->nz, 
                            adv->x_periodic, adv->y_periodic, adv->z_periodic);
   adv->U = str_grid_cell_data_new(adv->grid, 1, 1);
-  adv->F = str_grid_face_data_new(adv->grid, 1);
+
+  // Create work "vectors."
+  adv->U_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
+  adv->dUdt_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
+  adv->F_work = str_grid_face_data_new(adv->grid, 1);
 
   // Initialize the state.
   int pos = 0, ip, jp, kp;
@@ -183,11 +189,11 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 {
   advect_t* adv = context;
 
-  // Create a cell data object aliased to X.
-  str_grid_cell_data_t* U = str_grid_cell_data_alias(adv->grid, 1, 1, X);
+  // Point our "work vector" at the given buffer.
+  str_grid_cell_data_set_buffer(adv->U_work, X, false);
 
   // Make sure ghost cells are filled.
-  str_grid_fill_ghost_cells(adv->grid, U);
+  str_grid_fill_ghost_cells(adv->grid, adv->U_work);
 
   // Now go over each cell and compute fluxes.
   int pos, ip, jp, kp;
@@ -196,9 +202,9 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   // x fluxes.
   pos = 0;
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
-  while (str_grid_face_data_next_x_patch(adv->F, &pos, &ip, &jp, &kp, &face_patch))
+  while (str_grid_face_data_next_x_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(U, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -235,9 +241,9 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 
   // y fluxes.
   pos = 0;
-  while (str_grid_face_data_next_y_patch(adv->F, &pos, &ip, &jp, &kp, &face_patch))
+  while (str_grid_face_data_next_y_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(U, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -274,9 +280,9 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 
   // z fluxes.
   pos = 0;
-  while (str_grid_face_data_next_z_patch(adv->F, &pos, &ip, &jp, &kp, &face_patch))
+  while (str_grid_face_data_next_z_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(U, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -312,28 +318,27 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   }
 
   // Now compute dU/dt.
-  str_grid_cell_data_t* dUdt = str_grid_cell_data_alias(adv->grid, 1, 1, dXdt);
+  str_grid_cell_data_set_buffer(adv->dUdt_work, dXdt, false);
 
   real_t V = dx * dy * dz;
   real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
   pos = 0;
-  str_grid_patch_t* cell_patch;
-  while (str_grid_cell_data_next_patch(U, &pos, &ip, &jp, &kp, &cell_patch))
+  str_grid_patch_t* rhs_patch;
+  while (str_grid_cell_data_next_patch(adv->dUdt_work, &pos, &ip, &jp, &kp, &rhs_patch))
   {
-    str_grid_patch_t* rhs_patch = str_grid_cell_data_patch(dUdt, ip, jp, kp);
-    str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
-    str_grid_patch_t* y_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
-    str_grid_patch_t* z_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
+    str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
+    str_grid_patch_t* y_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
+    str_grid_patch_t* z_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(dUdt, rhs_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fx, x_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fy, y_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fz, z_face_patch);
 
-    for (int i = cell_patch->i1; i < cell_patch->i2; ++i)
+    for (int i = rhs_patch->i1; i < rhs_patch->i2; ++i)
     {
-      for (int j = cell_patch->j1; j < cell_patch->j2; ++j)
+      for (int j = rhs_patch->j1; j < rhs_patch->j2; ++j)
       {
-        for (int k = cell_patch->k1; k < cell_patch->k2; ++k)
+        for (int k = rhs_patch->k1; k < rhs_patch->k2; ++k)
         {
           real_t div_F = Ax * (Fx[i+1][j][k][0] - Fx[i][j][k][0]) + 
                          Ay * (Fy[i][j+1][k][0] - Fy[i][j][k][0]) + 
@@ -343,10 +348,6 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
       }
     }
   }
-
-  // Clean up.
-  str_grid_cell_data_free(U);
-  str_grid_cell_data_free(dUdt);
 
   return 0;
 }
@@ -409,7 +410,9 @@ static void advect_dtor(void* context)
   advect_t* adv = context;
   str_grid_free(adv->grid);
   str_grid_cell_data_free(adv->U);
-  str_grid_face_data_free(adv->F);
+  str_grid_face_data_free(adv->F_work);
+  str_grid_cell_data_free(adv->U_work);
+  str_grid_cell_data_free(adv->dUdt_work);
   polymec_free(adv);
 }
 

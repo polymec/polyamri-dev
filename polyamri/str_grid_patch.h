@@ -53,11 +53,13 @@ DECLARE_4D_ARRAY(real_t, array, patch->data, patch->i1 + patch->i2, patch->j1 + 
 
 // Creates a new structured grid patch of the given size with nc components 
 // and ng ghost indices.
-str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, int nc, int ng);
+str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, 
+                                     int nc, int ng);
 
 // Creates a structured grid patch whose data is contained in the given buffer.
 // This data is not managed by the grid patch.
-str_grid_patch_t* str_grid_patch_alias(int ni, int nj, int nk, int nc, int ng, real_t* buffer);
+str_grid_patch_t* str_grid_patch_with_buffer(int ni, int nj, int nk, 
+                                             int nc, int ng, void* buffer);
 
 // Creates a deep copy of the structured grid patch.
 str_grid_patch_t* str_grid_patch_clone(str_grid_patch_t* patch);

@@ -8,7 +8,8 @@
 #include "polyamri/polyamri.h"
 #include "polyamri/str_grid_patch.h"
 
-str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, int nc, int ng)
+str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, 
+                                     int nc, int ng)
 {
   ASSERT(ni > 0);
   ASSERT(nj > 0);
@@ -33,7 +34,8 @@ str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, int nc, int ng)
   return p;
 }
 
-str_grid_patch_t* str_grid_patch_alias(int ni, int nj, int nk, int nc, int ng, real_t* buffer)
+str_grid_patch_t* str_grid_patch_with_buffer(int ni, int nj, int nk, 
+                                             int nc, int ng, void* buffer)
 {
   ASSERT(ni > 0);
   ASSERT(nj > 0);

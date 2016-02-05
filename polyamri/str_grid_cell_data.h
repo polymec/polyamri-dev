@@ -16,7 +16,8 @@
 typedef struct str_grid_cell_data_t str_grid_cell_data_t;
 
 // Creates a str_grid_cell_data object associated with the given grid, with 
-// the given number of components and ghost layers.
+// the given number of components and ghost layers. This object manages its 
+// own memory.
 str_grid_cell_data_t* str_grid_cell_data_new(str_grid_t* grid, 
                                              int num_components, 
                                              int num_ghost_layers);
@@ -26,11 +27,12 @@ str_grid_cell_data_t* str_grid_cell_data_new(str_grid_t* grid,
 // a serialized into a sequential buffer. This object does not own the data 
 // in the buffer--it only accesses it. It is up to the caller to ensure that 
 // the lifetime of the buffer exceeds that of the resulting str_grid_cell_data
-// object.
-str_grid_cell_data_t* str_grid_cell_data_alias(str_grid_t* grid, 
-                                               int num_components, 
-                                               int num_ghost_layers,
-                                               real_t* buffer);
+// object. NOTE: the buffer can be NULL as long as no patch data is accessed, 
+// and can be set using str_grid_cell_data_set_buffer below.
+str_grid_cell_data_t* str_grid_cell_data_with_buffer(str_grid_t* grid, 
+                                                     int num_components, 
+                                                     int num_ghost_layers,
+                                                     void* buffer);
 
 // Frees the given str_grid_cell_data object.
 void str_grid_cell_data_free(str_grid_cell_data_t* cell_data);
@@ -73,12 +75,16 @@ void str_grid_cell_data_start_filling_ghosts(str_grid_cell_data_t* cell_data);
 // a call to str_grid_cell_data_start_filling_ghosts().
 void str_grid_cell_data_finish_filling_ghosts(str_grid_cell_data_t* cell_data);
 
-// Copies all of the cell data to a contiguous buffer. The buffer is assumed 
-// to be large enough to hold all of the cells (including ghost cells).
-void str_grid_cell_data_pack(str_grid_cell_data_t* cell_data, real_t* buffer);
+// Returns the pointer to the underlying patch data buffer.
+void* str_grid_cell_data_buffer(str_grid_cell_data_t* cell_data);
 
-// Copies all of the cell data from a contigous buffer into this object.
-void str_grid_cell_data_unpack(str_grid_cell_data_t* cell_data, real_t* buffer);
+// Resets the pointer to the underlying patch data buffer, destroying or 
+// releasing all existing patch data. If assume_control is true, the 
+// str_grid_cell_data object will assume control over the buffer and free it 
+// upon destruction--otherwise it is assumed to be managed elsewhere.
+void str_grid_cell_data_set_buffer(str_grid_cell_data_t* cell_data, 
+                                   void* buffer, 
+                                   bool assume_control);
 
 #endif
 
