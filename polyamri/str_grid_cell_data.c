@@ -31,7 +31,7 @@ static void count_cells(str_grid_cell_data_t* cell_data)
 {
   int pos = 0, ip, jp, kp, l = 1;
   str_grid_patch_t* patch;
-  cell_data->num_interior_cells = cell_data->total_num_cells;
+  cell_data->num_interior_cells = cell_data->total_num_cells = 0;
   cell_data->patch_offsets[0] = 0;
   while (str_grid_cell_data_next_patch(cell_data, &pos, &ip, &jp, &kp, &patch))
   {
