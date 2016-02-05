@@ -32,6 +32,9 @@ typedef struct
 
   // Velocity field.
   st_func_t* V;
+
+  // Current patch (for integration).
+  int ip, jp, kp;
 } advect_t;
 
 static const char advect_desc[] = "PolyAMRI advection (str_advect)\n"
@@ -174,12 +177,13 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
     return FLT_MAX;
 }
 
-static real_t advect_advance(void* context, real_t max_dt, real_t t)
+// Here's the right-hand side for the ARK integrator.
+static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 {
   advect_t* adv = context;
 
   // Make sure ghost cells are filled.
-  str_grid_fill_ghost_cells(adv->grid, adv->U);
+  str_grid_fill_ghost_cells(adv->grid, adv->Uwork);
 
   // Now go over each cell and compute fluxes.
   int pos, ip, jp, kp;
@@ -318,11 +322,11 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
     DECLARE_STR_GRID_PATCH_ARRAY(Fy, y_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fz, z_face_patch);
 
-    for (int i = 0; i < adv->nx; ++i)
+    for (int i = cell_patch->i1; i < cell_patch->i2; ++i)
     {
-      for (int j = 0; j < adv->ny; ++j)
+      for (int j = cell_patch->j1; j < cell_patch->j2; ++j)
       {
-        for (int k = 0; k < adv->nz; ++k)
+        for (int k = cell_patch->k1; k < cell_patch->k2; ++k)
         {
           real_t div_F = Ax * (Fx[i+1][j][k][0] - Fx[i][j][k][0]) + 
                          Ay * (Fy[i][j+1][k][0] - Fy[i][j][k][0]) + 
@@ -334,6 +338,24 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
   }
 
   return max_dt;
+}
+
+static real_t advect_advance(void* context, real_t max_dt, real_t t)
+{
+  advect_t* adv = context;
+
+  // Stuff the patch data into an array.
+  str_grid_patch_pack(adv->U, adv->X);
+
+  // Integrate!
+  real_t t2 = t;
+  if (!ode_integrator_step(adv->integrator, max_dt, &t2, X))
+    polymec_error("advect_advance: Integration failed at t = %g.", t);
+
+  // Get the patch data back.
+  str_grid_patch_unpack(adv->U, adv->X);
+
+  return t2 - t;
 }
 
 static void advect_load(void* context, const char* file_prefix, const char* directory, real_t* t, int step)
