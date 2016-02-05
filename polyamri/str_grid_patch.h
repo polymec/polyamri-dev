@@ -30,7 +30,7 @@ typedef struct
   // The start and end indices in i, j, k for the patch.
   int i1, i2, j1, j2, k1, k2;
 
-  // The number of ghost values.
+  // The number of ghost layers.
   int ng;
 } str_grid_patch_t;
 
@@ -54,6 +54,10 @@ DECLARE_4D_ARRAY(real_t, array, patch->data, patch->i1 + patch->i2, patch->j1 + 
 // Creates a new structured grid patch of the given size with nc components 
 // and ng ghost indices.
 str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, int nc, int ng);
+
+// Creates a structured grid patch whose data is contained in the given buffer.
+// This data is not managed by the grid patch.
+str_grid_patch_t* str_grid_patch_alias(int ni, int nj, int nk, int nc, int ng, real_t* buffer);
 
 // Creates a deep copy of the structured grid patch.
 str_grid_patch_t* str_grid_patch_clone(str_grid_patch_t* patch);

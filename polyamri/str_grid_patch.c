@@ -33,6 +33,27 @@ str_grid_patch_t* str_grid_patch_new(int ni, int nj, int nk, int nc, int ng)
   return p;
 }
 
+str_grid_patch_t* str_grid_patch_alias(int ni, int nj, int nk, int nc, int ng, real_t* buffer)
+{
+  ASSERT(ni > 0);
+  ASSERT(nj > 0);
+  ASSERT(nk > 0);
+  ASSERT(nc > 0);
+  ASSERT(ng >= 0);
+
+  str_grid_patch_t* p = polymec_malloc(sizeof(str_grid_patch_t));
+  p->data = buffer;
+  p->nc = nc;
+  p->ng = ng;
+  p->i1 = ng;
+  p->i2 = ni + ng;
+  p->j1 = ng;
+  p->j2 = nj + ng;
+  p->k1 = ng;
+  p->k2 = nk + ng;
+  return p;
+}
+
 str_grid_patch_t* str_grid_patch_clone(str_grid_patch_t* patch)
 {
   int nc = patch->nc;

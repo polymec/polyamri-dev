@@ -9,6 +9,7 @@
 #include "polyamri/str_grid.h"
 #include "polyamri/str_grid_cell_data.h"
 #include "polyamri/str_grid_face_data.h"
+#include "polyamri/str_ode_integrator.h"
 #include "model/model.h"
 
 typedef struct
@@ -33,8 +34,8 @@ typedef struct
   // Velocity field.
   st_func_t* V;
 
-  // Current patch (for integration).
-  int ip, jp, kp;
+  // Time integrator.
+  str_ode_integrator_t* integ;
 } advect_t;
 
 static const char advect_desc[] = "PolyAMRI advection (str_advect)\n"
@@ -182,8 +183,11 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 {
   advect_t* adv = context;
 
+  // Create a cell data object aliased to X.
+  str_grid_cell_data_t* U = str_grid_cell_data_alias(adv->grid, 1, 1, X);
+
   // Make sure ghost cells are filled.
-  str_grid_fill_ghost_cells(adv->grid, adv->Uwork);
+  str_grid_fill_ghost_cells(adv->grid, U);
 
   // Now go over each cell and compute fluxes.
   int pos, ip, jp, kp;
@@ -194,7 +198,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
   while (str_grid_face_data_next_x_patch(adv->F, &pos, &ip, &jp, &kp, &face_patch))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(U, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -233,7 +237,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   pos = 0;
   while (str_grid_face_data_next_y_patch(adv->F, &pos, &ip, &jp, &kp, &face_patch))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(U, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -272,7 +276,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   pos = 0;
   while (str_grid_face_data_next_z_patch(adv->F, &pos, &ip, &jp, &kp, &face_patch))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(U, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -307,17 +311,20 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     }
   }
 
-  // Now advance the solution by the maximum timestep.
+  // Now compute dU/dt.
+  str_grid_cell_data_t* dUdt = str_grid_cell_data_alias(adv->grid, 1, 1, dXdt);
+
   real_t V = dx * dy * dz;
   real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
   pos = 0;
   str_grid_patch_t* cell_patch;
-  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &cell_patch))
+  while (str_grid_cell_data_next_patch(U, &pos, &ip, &jp, &kp, &cell_patch))
   {
+    str_grid_patch_t* rhs_patch = str_grid_cell_data_patch(dUdt, ip, jp, kp);
     str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
     str_grid_patch_t* y_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
     str_grid_patch_t* z_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
-    DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(dUdt, rhs_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fx, x_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fy, y_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fz, z_face_patch);
@@ -331,29 +338,27 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
           real_t div_F = Ax * (Fx[i+1][j][k][0] - Fx[i][j][k][0]) + 
                          Ay * (Fy[i][j+1][k][0] - Fy[i][j][k][0]) + 
                          Az * (Fz[i][j][k+1][0] - Fz[i][j][k][0]);
-          U[i][j][k][0] -= max_dt * div_F / V;
+          dUdt[i][j][k][0] = -div_F / V;
         }
       }
     }
   }
 
-  return max_dt;
+  // Clean up.
+  str_grid_cell_data_free(U);
+  str_grid_cell_data_free(dUdt);
+
+  return 0;
 }
 
 static real_t advect_advance(void* context, real_t max_dt, real_t t)
 {
   advect_t* adv = context;
 
-  // Stuff the patch data into an array.
-  str_grid_patch_pack(adv->U, adv->X);
-
   // Integrate!
   real_t t2 = t;
-  if (!ode_integrator_step(adv->integrator, max_dt, &t2, X))
+  if (!str_ode_integrator_step(adv->integ, max_dt, &t2, adv->U))
     polymec_error("advect_advance: Integration failed at t = %g.", t);
-
-  // Get the patch data back.
-  str_grid_patch_unpack(adv->U, adv->X);
 
   return t2 - t;
 }

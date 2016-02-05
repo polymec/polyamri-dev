@@ -21,6 +21,17 @@ str_grid_cell_data_t* str_grid_cell_data_new(str_grid_t* grid,
                                              int num_components, 
                                              int num_ghost_layers);
 
+// Creates a str_grid_cell_data object associated with the given grid, with 
+// patches whose data is aliased to data in the given patch buffer, which is 
+// a serialized into a sequential buffer. This object does not own the data 
+// in the buffer--it only accesses it. It is up to the caller to ensure that 
+// the lifetime of the buffer exceeds that of the resulting str_grid_cell_data
+// object.
+str_grid_cell_data_t* str_grid_cell_data_alias(str_grid_t* grid, 
+                                               int num_components, 
+                                               int num_ghost_layers,
+                                               real_t* buffer);
+
 // Frees the given str_grid_cell_data object.
 void str_grid_cell_data_free(str_grid_cell_data_t* cell_data);
 
@@ -32,6 +43,11 @@ int str_grid_cell_data_num_ghost_layers(str_grid_cell_data_t* cell_data);
 
 // Returns the number of patches in the str_grid_cell_data object.
 int str_grid_cell_data_num_patches(str_grid_cell_data_t* cell_data);
+
+// Returns the total number of cells in the str_grid_cell_data object. 
+// If include_ghosts is set to true, ghost cells are included -- otherwise 
+// only interior cells are included.
+int str_grid_cell_data_num_cells(str_grid_cell_data_t* cell_data, bool include_ghosts);
 
 // Returns an internal pointer to the given object's underlying str_grid.
 str_grid_t* str_grid_cell_data_grid(str_grid_cell_data_t* cell_data);
@@ -56,6 +72,13 @@ void str_grid_cell_data_start_filling_ghosts(str_grid_cell_data_t* cell_data);
 // Concludes an asynchronous ghost-filling operation initiated by 
 // a call to str_grid_cell_data_start_filling_ghosts().
 void str_grid_cell_data_finish_filling_ghosts(str_grid_cell_data_t* cell_data);
+
+// Copies all of the cell data to a contiguous buffer. The buffer is assumed 
+// to be large enough to hold all of the cells (including ghost cells).
+void str_grid_cell_data_pack(str_grid_cell_data_t* cell_data, real_t* buffer);
+
+// Copies all of the cell data from a contigous buffer into this object.
+void str_grid_cell_data_unpack(str_grid_cell_data_t* cell_data, real_t* buffer);
 
 #endif
 
