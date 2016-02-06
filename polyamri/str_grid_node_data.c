@@ -33,9 +33,9 @@ static void count_nodes(str_grid_node_data_t* node_data)
   node_data->patch_offsets[0] = 0;
   while (str_grid_node_data_next_patch(node_data, &pos, &ip, &jp, &kp, &patch))
   {
-    int nx = patch->i2 - patch->i1;
-    int ny = patch->j2 - patch->j1;
-    int nz = patch->k2 - patch->k1;
+    int nx = patch->i2 - patch->i1 + 1;
+    int ny = patch->j2 - patch->j1 + 1;
+    int nz = patch->k2 - patch->k1 + 1;
     node_data->num_nodes += nx * ny * nz;
     node_data->patch_offsets[l] = node_data->num_nodes * patch->nc;
     ++l;

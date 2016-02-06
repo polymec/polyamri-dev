@@ -21,11 +21,25 @@ typedef struct str_grid_face_data_t str_grid_face_data_t;
 str_grid_face_data_t* str_grid_face_data_new(str_grid_t* grid, 
                                              int num_components);
 
+// Creates a str_grid_face_data object associated with the given grid, with 
+// patches whose data is aliased to data in the given patch buffer, which is 
+// a serialized into a sequential buffer. This object does not own the data 
+// in the buffer--it only accesses it. It is up to the caller to ensure that 
+// the lifetime of the buffer exceeds that of the resulting str_grid_face_data
+// object. NOTE: the buffer can be NULL as long as no patch data is accessed, 
+// and can be set using str_grid_face_data_set_buffer below.
+str_grid_face_data_t* str_grid_face_data_with_buffer(str_grid_t* grid, 
+                                                     int num_components, 
+                                                     void* buffer);
+
 // Frees the given str_grid_face_data object.
 void str_grid_face_data_free(str_grid_face_data_t* face_data);
 
 // Returns the number of components in the str_grid_face_data object.
 int str_grid_face_data_num_components(str_grid_face_data_t* face_data);
+
+// Returns the total number of faces in the str_grid_face_data object. 
+int str_grid_face_data_num_faces(str_grid_face_data_t* face_data);
 
 // Returns an internal pointer to the given object's underlying str_grid.
 str_grid_t* str_grid_face_data_grid(str_grid_face_data_t* face_data);
@@ -62,6 +76,17 @@ bool str_grid_face_data_next_y_patch(str_grid_face_data_t* face_data, int* pos,
 bool str_grid_face_data_next_z_patch(str_grid_face_data_t* face_data, int* pos, 
                                      int* i, int* j, int* k, 
                                      str_grid_patch_t** z_patch);
+
+// Returns the pointer to the underlying patch data buffer.
+void* str_grid_face_data_buffer(str_grid_face_data_t* face_data);
+
+// Resets the pointer to the underlying patch data buffer, destroying or 
+// releasing all existing patch data. If assume_control is true, the 
+// str_grid_face_data object will assume control over the buffer and free it 
+// upon destruction--otherwise it is assumed to be managed elsewhere.
+void str_grid_face_data_set_buffer(str_grid_face_data_t* face_data, 
+                                   void* buffer, 
+                                   bool assume_control);
 
 #endif
 
