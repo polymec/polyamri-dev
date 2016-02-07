@@ -10,7 +10,92 @@
 #include "polyamri/str_grid_cell_data.h"
 #include "polyamri/str_grid_face_data.h"
 #include "polyamri/str_ode_integrator.h"
+#include "polyamri/interpreter_register_polyamri_functions.h"
 #include "model/model.h"
+#include "integrators/ark_ode_integrator.h"
+
+//------------------------------------------------------------------------
+//                  Lua functions specific to this model
+//------------------------------------------------------------------------
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+
+static const char* solid_body_rotation_usage = 
+  "solid_body_rotation{origin = x0, alpha_dot = A, beta_dot = B, gamma_dot = C}\n"
+  "  Creates a velocity field representing a solid body rotating in 3D space.\n"
+  "  Arguments are:\n"
+  "    origin    - Point about which the body rotates.\n"
+  "    alpha_dot - Rotational velocity about the Euler angle alpha.\n"
+  "    beta_dot  - Rotational velocity about the Euler angle beta.\n"
+  "    gamma_dot - Rotational velocity about the Euler angle gamma.";
+
+typedef struct 
+{
+  point_t x0;
+  real_t alpha_dot, beta_dot, gamma_dot;
+} sbr_t;
+
+static void sbr_eval(void* context, point_t* x, real_t t, real_t* val)
+{
+  sbr_t* sbr = context;
+  vector_t R;
+  point_displacement(&sbr->x0, x, &R);
+  // FIXME
+}
+
+static int solid_body_rotation(lua_State* lua)
+{
+  // Check the number of arguments.
+  int num_args = lua_gettop(lua);
+  if ((num_args != 3) && (num_args != 4))
+    return luaL_error(lua, solid_body_rotation_usage);
+
+  // Get the origin if it's given.
+  lua_pushstring(lua, "origin");
+  lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
+  if (!lua_isnil(lua, -1) && !lua_ispoint(lua, -1))
+    return luaL_error(lua, solid_body_rotation_usage);
+  point_t* x0 = lua_topoint(lua, -1);
+  lua_pop(lua, 1);
+
+  const char* entries[] = {"alpha_dot", "beta_dot", "gamma_dot"};
+  real_t values[3];
+  for (int i = 0; i < 3; ++i)
+  {
+    lua_pushstring(lua, entries[i]);
+    lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
+    if (lua_isnil(lua, -1) || !lua_isnumber(lua, -1))
+      return luaL_error(lua, solid_body_rotation_usage);
+    values[i] = (real_t)lua_tonumber(lua, -1); 
+    lua_pop(lua, 1);
+  }
+
+  // Create and return the function.
+  sbr_t* sbr = polymec_malloc(sizeof(sbr_t));
+  sbr->x0 = *x0;
+  sbr->alpha_dot = values[0];
+  sbr->beta_dot = values[1];
+  sbr->gamma_dot = values[2];
+  char name[1025];
+  snprintf(name, 1024, "Solid body rotation(x0 = (%g, %g, %g), alpha_dot = %g, beta_dot = %g, gamma_dot = %g)",
+           x0->x, x0->y, x0->z, values[0], values[1], values[2]);
+  st_func_vtable vtable = {.eval = sbr_eval, .dtor = polymec_free};
+  st_func_t* func = st_func_new(name, sbr, vtable, ST_FUNC_INHOMOGENEOUS, ST_FUNC_CONSTANT, 3);
+
+  lua_pushvectorfunction(lua, func);
+  return 1;
+}
+
+static void interpreter_register_advect_functions(interpreter_t* interp)
+{
+  interpreter_register_function(interp, "solid_body_rotation", solid_body_rotation, 
+    docstring_from_string(solid_body_rotation_usage));
+}
+
+//------------------------------------------------------------------------
+//                    End str_advect-specific Lua functions
+//------------------------------------------------------------------------
 
 typedef struct
 {
@@ -49,68 +134,10 @@ static void advect_read_input(void* context,
                               interpreter_t* interpreter, 
                               options_t* options)
 {
-}
-
-static void advect_init(void* context, real_t t)
-{
   advect_t* adv = context;
-  ASSERT(adv->nx > 0);
-  ASSERT(adv->ny > 0);
-  ASSERT(adv->nz > 0);
-  ASSERT(adv->npx > 0);
-  ASSERT(adv->npy > 0);
-  ASSERT(adv->npz > 0);
-  ASSERT(!bbox_is_empty_set(&adv->bbox));
-  ASSERT(!bbox_is_point(&adv->bbox));
-  ASSERT(!bbox_is_line(&adv->bbox));
-  ASSERT(!bbox_is_plane(&adv->bbox));
-  ASSERT(st_func_num_comp(adv->U0) == 1);
-  ASSERT(st_func_num_comp(adv->V) == 3);
 
-  // Set the grid spacings.
-  int Nx = adv->npx * adv->nx;
-  int Ny = adv->npy * adv->ny;
-  int Nz = adv->npz * adv->nz;
-  adv->dx = (adv->bbox.x2 - adv->bbox.x1) / Nx;
-  adv->dy = (adv->bbox.y2 - adv->bbox.y1) / Ny;
-  adv->dz = (adv->bbox.z2 - adv->bbox.z1) / Nz;
-
-  // Create the grid and the state vector. 
-  log_detail("str_advect: Creating %d x %d x %d grid...", Nx, Ny, Nz);
-  adv->grid = str_grid_new(adv->npx, adv->npy, adv->npz, 
-                           adv->nx, adv->ny, adv->nz, 
-                           adv->x_periodic, adv->y_periodic, adv->z_periodic);
-  adv->U = str_grid_cell_data_new(adv->grid, 1, 1);
-
-  // Create work "vectors."
-  adv->U_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
-  adv->dUdt_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
-  adv->F_work = str_grid_face_data_new(adv->grid, 1);
-
-  // Initialize the state.
-  int pos = 0, ip, jp, kp;
-  str_grid_patch_t* patch;
-  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch))
-  {
-    DECLARE_STR_GRID_PATCH_ARRAY(U, patch);
-    point_t x;
-    for (int i = patch->i1; i < patch->i2; ++i)
-    {
-      int I = i - patch->i1;
-      x.x = (ip * adv->nx + (I + 0.5)) * adv->dx;
-      for (int j = patch->j1; j < patch->j2; ++j)
-      {
-        int J = j - patch->j1;
-        x.y = (jp * adv->ny + (J + 0.5)) * adv->dy;
-        for (int k = patch->k1; k < patch->k2; ++k)
-        {
-          int K = j - patch->k1;
-          x.z = (kp * adv->nz + (K + 0.5)) * adv->dz;
-          st_func_eval(adv->U0, &x, t, &U[i][j][k][0]);
-        }
-      }
-    }
-  }
+  // Get grid information.
+//  mod->mesh = interpreter_get_mesh(interp, "mesh");
 }
 
 static real_t advect_max_dt(void* context, real_t t, char* reason)
@@ -182,6 +209,22 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
     return dx / V_max;
   else 
     return FLT_MAX;
+}
+
+static real_t ark_max_dt_wrapper(void* context, real_t t, real_t* x)
+{
+  char reason[POLYMEC_MODEL_MAXDT_REASON_SIZE];
+  return advect_max_dt(context, t, reason);
+}
+
+static void advect_clear(advect_t* adv)
+{
+  str_ode_integrator_free(adv->integ);
+  str_grid_free(adv->grid);
+  str_grid_cell_data_free(adv->U);
+  str_grid_face_data_free(adv->F_work);
+  str_grid_cell_data_free(adv->U_work);
+  str_grid_cell_data_free(adv->dUdt_work);
 }
 
 // Here's the right-hand side for the ARK integrator.
@@ -352,6 +395,93 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   return 0;
 }
 
+static void advect_setup(advect_t* adv)
+{
+  ASSERT(adv->nx > 0);
+  ASSERT(adv->ny > 0);
+  ASSERT(adv->nz > 0);
+  ASSERT(adv->npx > 0);
+  ASSERT(adv->npy > 0);
+  ASSERT(adv->npz > 0);
+  ASSERT(!bbox_is_empty_set(&adv->bbox));
+  ASSERT(!bbox_is_point(&adv->bbox));
+  ASSERT(!bbox_is_line(&adv->bbox));
+  ASSERT(!bbox_is_plane(&adv->bbox));
+  ASSERT(st_func_num_comp(adv->U0) == 1);
+  ASSERT(st_func_num_comp(adv->V) == 3);
+
+  advect_clear(adv);
+
+  int num_comps = 1;
+  int num_ghost_layers = 1;
+
+  // Set the grid spacings.
+  int Nx = adv->npx * adv->nx;
+  int Ny = adv->npy * adv->ny;
+  int Nz = adv->npz * adv->nz;
+  adv->dx = (adv->bbox.x2 - adv->bbox.x1) / Nx;
+  adv->dy = (adv->bbox.y2 - adv->bbox.y1) / Ny;
+  adv->dz = (adv->bbox.z2 - adv->bbox.z1) / Nz;
+
+  // Create the grid and the state vector. 
+  log_detail("str_advect: Creating %d x %d x %d grid...", Nx, Ny, Nz);
+  adv->grid = str_grid_new(adv->npx, adv->npy, adv->npz, 
+                           adv->nx, adv->ny, adv->nz, 
+                           adv->x_periodic, adv->y_periodic, adv->z_periodic);
+  adv->U = str_grid_cell_data_new(adv->grid, num_comps, num_ghost_layers);
+
+  // Create work "vectors."
+  adv->U_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
+  adv->dUdt_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
+  adv->F_work = str_grid_face_data_new(adv->grid, 1);
+
+  // Create the ARK integrator.
+  int num_local_cells = str_grid_cell_data_num_cells(adv->U, false);
+  int total_num_cells = str_grid_cell_data_num_cells(adv->U, true);
+  int num_ghost_cells = total_num_cells - num_local_cells;
+  int N_local = num_comps * num_local_cells;
+  int N_remote = num_comps * num_ghost_cells;
+  ode_integrator_t* ark2 = explicit_ark_ode_integrator_new(2, 
+                                                           MPI_COMM_WORLD,
+                                                           N_local,
+                                                           N_remote,
+                                                           adv,
+                                                           advect_rhs,
+                                                           ark_max_dt_wrapper,
+                                                           NULL);
+  adv->integ = str_ode_integrator_new(ark2);
+}
+
+static void advect_init(void* context, real_t t)
+{
+  advect_t* adv = context;
+
+  // Initialize the state.
+  int pos = 0, ip, jp, kp;
+  str_grid_patch_t* patch;
+  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch))
+  {
+    DECLARE_STR_GRID_PATCH_ARRAY(U, patch);
+    point_t x;
+    for (int i = patch->i1; i < patch->i2; ++i)
+    {
+      int I = i - patch->i1;
+      x.x = (ip * adv->nx + (I + 0.5)) * adv->dx;
+      for (int j = patch->j1; j < patch->j2; ++j)
+      {
+        int J = j - patch->j1;
+        x.y = (jp * adv->ny + (J + 0.5)) * adv->dy;
+        for (int k = patch->k1; k < patch->k2; ++k)
+        {
+          int K = j - patch->k1;
+          x.z = (kp * adv->nz + (K + 0.5)) * adv->dz;
+          st_func_eval(adv->U0, &x, t, &U[i][j][k][0]);
+        }
+      }
+    }
+  }
+}
+
 static real_t advect_advance(void* context, real_t max_dt, real_t t)
 {
   advect_t* adv = context;
@@ -368,15 +498,18 @@ static void advect_load(void* context, const char* file_prefix, const char* dire
 {
 #if 0
   advect_t* adv = context;
-  silo_file_t* silo = silo_file_open(adv->grid->comm, file_prefix, directory, 0, step, t);
-  *t = 1.0 * step;
 
-  ASSERT(adv->grid == NULL);
-  ASSERT(adv->state == NULL);
-  adv->grid = silo_file_read_mesh(silo, "grid");
-  adv->stencil = cell_halo_stencil_new(adv->grid);
-  adv->state = silo_file_read_scalar_cell_field(silo, "state", "grid", NULL);
+  silo_file_t* silo = silo_file_open(MPI_COMM_WORLD, prefix, directory, 0, step, t);
+  if (advect->grid != NULL)
+    mesh_free(mod->mesh);
+  mod->mesh = silo_file_read_mesh(silo, "mesh");
+  real_t* X = silo_file_read_scalar_cell_field(silo, "X", "mesh", NULL);
   silo_file_close(silo);
+
+  // Set everything up and copy the saved solution.
+  advect_setup(adv);
+  memcpy(mod->X, X, sizeof(real_t) * mod->mesh->num_cells);
+  polymec_free(X);
 #endif
 }
 
@@ -408,11 +541,8 @@ static void advect_finalize(void* context, int step, real_t t)
 static void advect_dtor(void* context)
 {
   advect_t* adv = context;
-  str_grid_free(adv->grid);
-  str_grid_cell_data_free(adv->U);
-  str_grid_face_data_free(adv->F_work);
-  str_grid_cell_data_free(adv->U_work);
-  str_grid_cell_data_free(adv->dUdt_work);
+
+  advect_clear(adv);
   polymec_free(adv);
 }
 
@@ -430,7 +560,14 @@ static model_t* advect_ctor()
                          .finalize = advect_finalize,
                          .dtor = advect_dtor};
   docstring_t* advect_doc = docstring_from_string(advect_desc);
-  return model_new("str_advect", adv, vtable, advect_doc, MODEL_MPI);
+  model_t* model = model_new("str_advect", adv, vtable, advect_doc, MODEL_MPI);
+
+  // Register polyamri- and advection-specific functions.
+  interpreter_t* interp = model_interpreter(model);
+  interpreter_register_polyamri_functions(interp);
+  interpreter_register_advect_functions(interp);
+
+  return model;
 }
 
 // Main program.
