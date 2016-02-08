@@ -184,6 +184,7 @@ bool str_grid_has_patch(str_grid_t* grid, int i, int j, int k)
 
 int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* data)
 {
+  ASSERT(grid->finalized);
   ASSERT(str_grid_cell_data_grid(data) == grid);
 
   // Dream up a new token for ghost fills.
@@ -224,6 +225,8 @@ int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* d
 
 void str_grid_finish_filling_ghost_cells(str_grid_t* grid, int token)
 {
+  ASSERT(grid->finalized);
+
   // Retrieve the operation tokens corresponding to this one and 
   // finish out the fill operations.
   int_array_t** op_tokens_p = (int_array_t**)int_ptr_unordered_map_get(grid->tokens, token);
