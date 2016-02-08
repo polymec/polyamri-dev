@@ -56,9 +56,12 @@ str_grid_patch_t* str_grid_node_data_patch(str_grid_node_data_t* node_data, int 
 
 // Traverses the grid data, returning true if a patch was found and false if not.
 // Set *pos to 0 to reset the traversal. patch is set to the cell patch.
+// Additionally, if bbox is non-NULL, its fields x1, x2, y1, y2, z1, z2 will 
+// be set to the spatial extent of the edge patch in logical space.
 bool str_grid_node_data_next_patch(str_grid_node_data_t* node_data, int* pos, 
                                    int* i, int* j, int* k, 
-                                   str_grid_patch_t** patch);
+                                   str_grid_patch_t** patch,
+                                   bbox_t* bbox);
 
 // Returns the pointer to the underlying patch data buffer.
 void* str_grid_node_data_buffer(str_grid_node_data_t* node_data);

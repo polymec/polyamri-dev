@@ -14,8 +14,8 @@
 #include "lauxlib.h"
 
 static const char* structured_grid_usage = 
-  "structured_grid{num_cells = {nx, ny, nz},\n"
-  "                patch_size = {px, py, pz}}\n"
+  "grid = structured_grid{num_cells = {nx, ny, nz},\n"
+  "                       patch_size = {px, py, pz}}\n"
   "  Creates a structured grid spanning the given domain with the given\n"
   "  numbers of cells in the x, y, z directions, comprising patches of the\n"
   "  given dimensions (in cells).";
@@ -24,7 +24,7 @@ static int structured_grid(lua_State* lua)
 {
   // Check the number of arguments.
   int num_args = lua_gettop(lua);
-  if (num_args != 2)
+  if (num_args != 1)
     return luaL_error(lua, structured_grid_usage);
 
   // Parse the numbers of cells.
@@ -70,8 +70,18 @@ static int structured_grid(lua_State* lua)
   int ny = num_cells[1]/patch_size[1];
   int nz = num_cells[2]/patch_size[2];
   str_grid_t* grid = str_grid_new(nx, ny, nz, patch_size[0], patch_size[1], patch_size[2], false, false, false);
-  lua_pushuserdefined(lua, grid, DTOR(str_grid_free));
 
+  // Fill it with patches.
+  // Ghost cells are filled with local copies.
+  for (int ip = 0; ip < nx; ++ip)
+    for (int jp = 0; jp < ny; ++jp)
+      for (int kp = 0; kp < nz; ++kp)
+        str_grid_insert_patch(grid, ip, jp, kp);
+
+  // Finalize the grid.
+  str_grid_finalize(grid);
+
+  lua_pushuserdefined(lua, grid, DTOR(str_grid_free));
   return 1;
 }
 

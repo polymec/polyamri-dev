@@ -12,6 +12,7 @@ struct str_grid_node_data_t
 {
   str_grid_t* grid;
   int nx, ny, nz, nc;
+  real_t patch_lx, patch_ly, patch_lz;
   int_ptr_unordered_map_t* patches;
   int* patch_offsets;
   int num_nodes;
@@ -31,7 +32,7 @@ static void count_nodes(str_grid_node_data_t* node_data)
   str_grid_patch_t* patch;
   node_data->num_nodes = 0;
   node_data->patch_offsets[0] = 0;
-  while (str_grid_node_data_next_patch(node_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_node_data_next_patch(node_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int nx = patch->i2 - patch->i1 + 1;
     int ny = patch->j2 - patch->j1 + 1;
@@ -73,6 +74,9 @@ str_grid_node_data_t* str_grid_node_data_with_buffer(str_grid_t* grid,
   // Now populate the patches (with NULL buffers).
   int px, py, pz;
   str_grid_get_patch_size(grid, &px, &py, &pz);
+  node_data->patch_lx = 1.0 / px;
+  node_data->patch_ly = 1.0 / py;
+  node_data->patch_lz = 1.0 / pz;
   int pos = 0, i, j, k, l = 0;
   while (str_grid_next_patch(grid, &pos, &i, &j, &k))
   {
@@ -132,11 +136,23 @@ str_grid_patch_t* str_grid_node_data_patch(str_grid_node_data_t* node_data, int 
 
 bool str_grid_node_data_next_patch(str_grid_node_data_t* node_data, int* pos, 
                                    int* i, int* j, int* k, 
-                                   str_grid_patch_t** patch)
+                                   str_grid_patch_t** patch,
+                                   bbox_t* bbox)
 {
   bool result = str_grid_next_patch(node_data->grid, pos, i, j, k);
   if (result)
+  {
     *patch = str_grid_node_data_patch(node_data, *i, *j, *k);
+    if (bbox != NULL)
+    {
+      bbox->x1 = (*i) * node_data->patch_lx;
+      bbox->x2 = bbox->x1 + node_data->patch_lx;
+      bbox->y1 = (*j) * node_data->patch_ly;
+      bbox->y2 = bbox->y1 + node_data->patch_ly;
+      bbox->z1 = (*k) * node_data->patch_lz;
+      bbox->z2 = bbox->z1 + node_data->patch_lz;
+    }
+  }
   return result;
 }
 
@@ -157,7 +173,7 @@ void str_grid_node_data_set_buffer(str_grid_node_data_t* node_data,
   // Point the patches at the buffer.
   int pos = 0, l = 0, ip, jp, kp;
   str_grid_patch_t* patch;
-  while (str_grid_node_data_next_patch(node_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_node_data_next_patch(node_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int patch_offset = node_data->patch_offsets[l];
     patch->data = &(((real_t*)buffer)[patch_offset]);

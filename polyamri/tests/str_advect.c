@@ -7,6 +7,7 @@
 
 #include "polyamri/polyamri.h"
 #include "polyamri/str_grid.h"
+#include "polyamri/str_grid_patch_filler.h"
 #include "polyamri/str_grid_cell_data.h"
 #include "polyamri/str_grid_face_data.h"
 #include "polyamri/str_ode_integrator.h"
@@ -22,9 +23,9 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
-static const char* solid_body_rotation_usage = 
-  "solid_body_rotation{origin = x0, alpha_dot = A, beta_dot = B, gamma_dot = C}\n"
-  "  Creates a velocity field representing a solid body rotating in 3D space.\n"
+static const char* rigid_body_rotation_usage = 
+  "V = rigid_body_rotation{origin = x0, alpha_dot = A, beta_dot = B, gamma_dot = C}\n"
+  "  Creates a velocity field representing a rigid body rotating in 3D space.\n"
   "  Arguments are:\n"
   "    origin    - Point about which the body rotates.\n"
   "    alpha_dot - Rotational velocity about the Euler angle alpha.\n"
@@ -45,18 +46,19 @@ static void sbr_eval(void* context, point_t* x, real_t t, real_t* val)
   // FIXME
 }
 
-static int solid_body_rotation(lua_State* lua)
+static int rigid_body_rotation(lua_State* lua)
 {
   // Check the number of arguments.
   int num_args = lua_gettop(lua);
-  if ((num_args != 3) && (num_args != 4))
-    return luaL_error(lua, solid_body_rotation_usage);
+  if (num_args != 1)
+    return luaL_error(lua, rigid_body_rotation_usage);
 
   // Get the origin if it's given.
   lua_pushstring(lua, "origin");
   lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
+printf("%s\n", lua_tostring(lua, -1));
   if (!lua_isnil(lua, -1) && !lua_ispoint(lua, -1))
-    return luaL_error(lua, solid_body_rotation_usage);
+    return luaL_error(lua, rigid_body_rotation_usage);
   point_t* x0 = lua_topoint(lua, -1);
   lua_pop(lua, 1);
 
@@ -66,20 +68,24 @@ static int solid_body_rotation(lua_State* lua)
   {
     lua_pushstring(lua, entries[i]);
     lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
+printf("%s\n", lua_tostring(lua, -1));
     if (lua_isnil(lua, -1) || !lua_isnumber(lua, -1))
-      return luaL_error(lua, solid_body_rotation_usage);
+      return luaL_error(lua, rigid_body_rotation_usage);
     values[i] = (real_t)lua_tonumber(lua, -1); 
     lua_pop(lua, 1);
   }
 
   // Create and return the function.
   sbr_t* sbr = polymec_malloc(sizeof(sbr_t));
-  sbr->x0 = *x0;
+  if (x0 != NULL)
+    sbr->x0 = *x0;
+  else
+    sbr->x0.x = sbr->x0.y = sbr->x0.z = 0.0;
   sbr->alpha_dot = values[0];
   sbr->beta_dot = values[1];
   sbr->gamma_dot = values[2];
   char name[1025];
-  snprintf(name, 1024, "Solid body rotation(x0 = (%g, %g, %g), alpha_dot = %g, beta_dot = %g, gamma_dot = %g)",
+  snprintf(name, 1024, "Rigid body rotation(x0 = (%g, %g, %g), alpha_dot = %g, beta_dot = %g, gamma_dot = %g)",
            x0->x, x0->y, x0->z, values[0], values[1], values[2]);
   st_func_vtable vtable = {.eval = sbr_eval, .dtor = polymec_free};
   st_func_t* func = st_func_new(name, sbr, vtable, ST_FUNC_HETEROGENEOUS, ST_FUNC_CONSTANT, 3);
@@ -90,8 +96,8 @@ static int solid_body_rotation(lua_State* lua)
 
 static void interpreter_register_advect_functions(interpreter_t* interp)
 {
-  interpreter_register_function(interp, "solid_body_rotation", solid_body_rotation, 
-    docstring_from_string(solid_body_rotation_usage));
+  interpreter_register_function(interp, "rigid_body_rotation", rigid_body_rotation, 
+    docstring_from_string(rigid_body_rotation_usage));
 }
 
 //------------------------------------------------------------------------
@@ -102,16 +108,10 @@ typedef struct
 {
   MPI_Comm comm;
 
-  // Problem metadata.
-  int nx, ny, nz;     // cells
-  int npx, npy, npz;  // patches
-  bool x_periodic, y_periodic, z_periodic;
-  bbox_t bbox;
-  real_t dx, dy, dz;
-
   // Grid and computational domain.
   str_grid_t* grid;
   coord_mapping_t* domain;
+  real_t dx, dy, dz;
 
   // State information.
   str_grid_cell_data_t* U;
@@ -239,12 +239,16 @@ static real_t ark_max_dt_wrapper(void* context, real_t t, real_t* x)
 
 static void advect_clear(advect_t* adv)
 {
-  str_ode_integrator_free(adv->integ);
-  str_grid_free(adv->grid);
-  str_grid_cell_data_free(adv->U);
-  str_grid_face_data_free(adv->F_work);
-  str_grid_cell_data_free(adv->U_work);
-  str_grid_cell_data_free(adv->dUdt_work);
+  if (adv->integ != NULL)
+    str_ode_integrator_free(adv->integ);
+  if (adv->U != NULL)
+    str_grid_cell_data_free(adv->U);
+  if (adv->F_work != NULL)
+    str_grid_face_data_free(adv->F_work);
+  if (adv->U_work != NULL)
+    str_grid_cell_data_free(adv->U_work);
+  if (adv->dUdt_work != NULL)
+    str_grid_cell_data_free(adv->dUdt_work);
 }
 
 // Here's the right-hand side for the ARK integrator.
@@ -409,37 +413,65 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 
 static void advect_setup(advect_t* adv)
 {
-  ASSERT(adv->nx > 0);
-  ASSERT(adv->ny > 0);
-  ASSERT(adv->nz > 0);
-  ASSERT(adv->npx > 0);
-  ASSERT(adv->npy > 0);
-  ASSERT(adv->npz > 0);
-  ASSERT(!bbox_is_empty_set(&adv->bbox));
-  ASSERT(!bbox_is_point(&adv->bbox));
-  ASSERT(!bbox_is_line(&adv->bbox));
-  ASSERT(!bbox_is_plane(&adv->bbox));
   ASSERT(st_func_num_comp(adv->U0) == 1);
   ASSERT(st_func_num_comp(adv->V) == 3);
 
   advect_clear(adv);
 
-  int num_comps = 1;
-  int num_ghost_layers = 1;
+  // Here we set up the machinery to fill ghost cells in the grid.
+  str_grid_patch_filler_t* fill_from_west = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_X1_BOUNDARY, STR_GRID_PATCH_X2_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_east = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_X2_BOUNDARY, STR_GRID_PATCH_X1_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_north = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Y2_BOUNDARY, STR_GRID_PATCH_Y1_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_south = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Y1_BOUNDARY, STR_GRID_PATCH_Y2_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_below = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Z1_BOUNDARY, STR_GRID_PATCH_Z2_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_above = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Z2_BOUNDARY, STR_GRID_PATCH_Z1_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_boundary = NULL;
+
+  int npx, npy, npz;
+  str_grid_get_extents(adv->grid, &npx, &npy, &npz);
+
+  int pos = 0, ip, jp, kp;
+  while (str_grid_next_patch(adv->grid, &pos, &ip, &jp, &kp))
+  {
+    if (ip > 0)
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_west);
+    else
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+    if (ip < npx-1)
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_east);
+    else
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+    if (jp > 0)
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_south);
+    else
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+    if (jp < npy-1)
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_north);
+    else
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+    if (kp > 0)
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_below);
+    else
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+    if (kp < npz-1)
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_above);
+    else
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+  }
 
   // Set the grid spacings.
-  int Nx = adv->npx * adv->nx;
-  int Ny = adv->npy * adv->ny;
-  int Nz = adv->npz * adv->nz;
-  adv->dx = (adv->bbox.x2 - adv->bbox.x1) / Nx;
-  adv->dy = (adv->bbox.y2 - adv->bbox.y1) / Ny;
-  adv->dz = (adv->bbox.z2 - adv->bbox.z1) / Nz;
+  int nx, ny, nz;
+  str_grid_get_patch_size(adv->grid, &nx, &ny, &nz);
+  int Nx = npx * nx;
+  int Ny = npy * ny;
+  int Nz = npz * nz;
+  adv->dx = 1.0 / Nx;
+  adv->dy = 1.0 / Ny;
+  adv->dz = 1.0 / Nz;
 
-  // Create the grid and the state vector. 
-  log_detail("str_advect: Creating %d x %d x %d grid...", Nx, Ny, Nz);
-  adv->grid = str_grid_new(adv->npx, adv->npy, adv->npz, 
-                           adv->nx, adv->ny, adv->nz, 
-                           adv->x_periodic, adv->y_periodic, adv->z_periodic);
+  // Create the state vector.
+  int num_comps = 1;
+  int num_ghost_layers = 1;
   adv->U = str_grid_cell_data_new(adv->grid, num_comps, num_ghost_layers);
 
   // Create work "vectors."
@@ -467,6 +499,7 @@ static void advect_setup(advect_t* adv)
 static void advect_init(void* context, real_t t)
 {
   advect_t* adv = context;
+  advect_setup(adv);
 
   // Initialize the state.
   int pos = 0, ip, jp, kp;
@@ -553,6 +586,7 @@ static void advect_dtor(void* context)
   advect_t* adv = context;
 
   advect_clear(adv);
+  str_grid_free(adv->grid);
   polymec_free(adv);
 }
 
@@ -560,7 +594,14 @@ static model_t* advect_ctor()
 {
   advect_t* adv = polymec_malloc(sizeof(advect_t));
   adv->grid = NULL;
+  adv->domain = NULL;
+  adv->U0 = NULL;
+  adv->V = NULL;
   adv->U = NULL;
+  adv->F_work = NULL;
+  adv->U_work = NULL;
+  adv->dUdt_work = NULL;
+  adv->integ = NULL;
   model_vtable vtable = {.read_input = advect_read_input,
                          .init = advect_init,
                          .max_dt = advect_max_dt,

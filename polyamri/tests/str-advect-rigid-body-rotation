@@ -1,9 +1,9 @@
 -- This script tests the convergence of the linear advection model under 
--- solid body rotation.
+-- rigid body rotation.
 
 -- Initial condition.
 -- ball_and_jack(ball_radius, jack_size)
-initial_state = ball_and_jack(0.1, 0.07)
+initial_state = ball_and_jack({0, 0, 0}, 0.1, 1.0, 0.07, 2.0)
 
 -- Rotational velocity in terms of Euler angles describing a rigid body in 
 -- a rotated frame with axes X, Y, Z in terms of its unrotated axes x, y, z.
@@ -15,10 +15,10 @@ initial_state = ball_and_jack(0.1, 0.07)
 -- The velocity is defined in terms of the time derivatives of 
 -- these three angles, rotating about an origin.
 x0 = {0, 0, 0}
-velocity = solid_body_rotation{origin = x0,
-                               alpha_dot = A, 
-                               beta_dot = B, 
-                               gamma_dot = C}
+velocity = rigid_body_rotation{origin = x0,
+                               alpha_dot = 1.0, 
+                               beta_dot = 0, 
+                               gamma_dot = 0}
 
 -- Structured grid.
 grid = structured_grid{num_cells = {128, 128, 128},

@@ -61,21 +61,30 @@ str_grid_patch_t* str_grid_edge_data_z_patch(str_grid_edge_data_t* edge_data, in
 
 // Traverses the grid data, returning true if an x-edge patch was found and false if not.
 // Set *pos to 0 to reset the traversal. x_patch is set to the x-edge patch.
+// Additionally, if bbox is non-NULL, its fields x1, x2, y1, y2, z1, z2 will 
+// be set to the spatial extent of the edge patch in logical space.
 bool str_grid_edge_data_next_x_patch(str_grid_edge_data_t* edge_data, int* pos, 
                                      int* i, int* j, int* k, 
-                                     str_grid_patch_t** x_patch);
+                                     str_grid_patch_t** x_patch,
+                                     bbox_t* bbox);
 
 // Traverses the grid data, returning true if a y-edge patch was found and false if not.
 // Set *pos to 0 to reset the traversal. y_patch is set to the y-edge patch.
+// Additionally, if bbox is non-NULL, its fields x1, x2, y1, y2, z1, z2 will 
+// be set to the spatial extent of the edge patch in logical space.
 bool str_grid_edge_data_next_y_patch(str_grid_edge_data_t* edge_data, int* pos, 
                                      int* i, int* j, int* k, 
-                                     str_grid_patch_t** y_patch);
+                                     str_grid_patch_t** y_patch,
+                                     bbox_t* bbox);
 
 // Traverses the grid data, returning true if an z-edge patch was found and false if not.
 // Set *pos to 0 to reset the traversal. z_patch is set to the z-edge patch.
+// Additionally, if bbox is non-NULL, its fields x1, x2, y1, y2, z1, z2 will 
+// be set to the spatial extent of the edge patch in logical space.
 bool str_grid_edge_data_next_z_patch(str_grid_edge_data_t* edge_data, int* pos, 
                                      int* i, int* j, int* k, 
-                                     str_grid_patch_t** z_patch);
+                                     str_grid_patch_t** z_patch,
+                                     bbox_t* bbox);
 
 // Returns the pointer to the underlying patch data buffer.
 void* str_grid_edge_data_buffer(str_grid_edge_data_t* edge_data);
