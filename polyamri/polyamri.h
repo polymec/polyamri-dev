@@ -9,7 +9,6 @@
 #define POLYAMRI_H
 
 #include "core/polymec.h"
-#include "polyamri/polyamri_version.h"
 
 // Returns true if the given number is a power of 2, false otherwise.
 static inline bool is_power_of_2(int number)

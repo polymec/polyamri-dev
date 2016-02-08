@@ -122,6 +122,7 @@ str_grid_face_data_t* str_grid_face_data_with_buffer(str_grid_t* grid,
                                              str_grid_patch_with_buffer(px, py, pz+1, num_components, 0, NULL),
                                              DTOR(str_grid_patch_free));
   }
+  count_faces(face_data);
 
   // Set the buffer.
   str_grid_face_data_set_buffer(face_data, buffer, false);
