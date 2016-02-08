@@ -12,6 +12,7 @@ struct str_grid_face_data_t
 {
   str_grid_t* grid;
   int nx, ny, nz, nc;
+  real_t patch_lx, patch_ly, patch_lz;
   int_ptr_unordered_map_t* x_patches;
   int_ptr_unordered_map_t* y_patches;
   int_ptr_unordered_map_t* z_patches;
@@ -33,7 +34,7 @@ static void count_faces(str_grid_face_data_t* face_data)
   str_grid_patch_t* patch;
   face_data->num_faces = 0;
   face_data->patch_offsets[0] = 0;
-  while (str_grid_face_data_next_x_patch(face_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_face_data_next_x_patch(face_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int nx = patch->i2 - patch->i1 + 1;
     int ny = patch->j2 - patch->j1;
@@ -44,7 +45,7 @@ static void count_faces(str_grid_face_data_t* face_data)
   }
 
   pos = 0;
-  while (str_grid_face_data_next_y_patch(face_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_face_data_next_y_patch(face_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int nx = patch->i2 - patch->i1;
     int ny = patch->j2 - patch->j1 + 1;
@@ -55,7 +56,7 @@ static void count_faces(str_grid_face_data_t* face_data)
   }
 
   pos = 0;
-  while (str_grid_face_data_next_z_patch(face_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_face_data_next_z_patch(face_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int nx = patch->i2 - patch->i1;
     int ny = patch->j2 - patch->j1;
@@ -100,6 +101,9 @@ str_grid_face_data_t* str_grid_face_data_with_buffer(str_grid_t* grid,
   // Now populate the patches for x-, y-, and z-faces.
   int px, py, pz;
   str_grid_get_patch_size(grid, &px, &py, &pz);
+  face_data->patch_lx = 1.0 / px;
+  face_data->patch_ly = 1.0 / py;
+  face_data->patch_lz = 1.0 / pz;
   int pos = 0, i, j, k;
   while (str_grid_next_patch(grid, &pos, &i, &j, &k))
   {
@@ -181,31 +185,67 @@ str_grid_patch_t* str_grid_face_data_z_patch(str_grid_face_data_t* face_data, in
 
 bool str_grid_face_data_next_x_patch(str_grid_face_data_t* face_data, int* pos, 
                                      int* i, int* j, int* k, 
-                                     str_grid_patch_t** x_patch)
+                                     str_grid_patch_t** x_patch,
+                                     bbox_t* bbox)
 {
   bool result = str_grid_next_patch(face_data->grid, pos, i, j, k);
   if (result)
+  {
     *x_patch = str_grid_face_data_x_patch(face_data, *i, *j, *k);
+    if (bbox != NULL)
+    {
+      bbox->x1 = (*i) * face_data->patch_lx;
+      bbox->x2 = bbox->x1 + face_data->patch_lx;
+      bbox->y1 = (*j) * face_data->patch_ly;
+      bbox->y2 = bbox->y1 + face_data->patch_ly;
+      bbox->z1 = (*k) * face_data->patch_lz;
+      bbox->z2 = bbox->z1 + face_data->patch_lz;
+    }
+  }
   return result;
 }
 
 bool str_grid_face_data_next_y_patch(str_grid_face_data_t* face_data, int* pos, 
                                      int* i, int* j, int* k, 
-                                     str_grid_patch_t** y_patch)
+                                     str_grid_patch_t** y_patch,
+                                     bbox_t* bbox)
 {
   bool result = str_grid_next_patch(face_data->grid, pos, i, j, k);
   if (result)
+  {
     *y_patch = str_grid_face_data_y_patch(face_data, *i, *j, *k);
+    if (bbox != NULL)
+    {
+      bbox->x1 = (*i) * face_data->patch_lx;
+      bbox->x2 = bbox->x1 + face_data->patch_lx;
+      bbox->y1 = (*j) * face_data->patch_ly;
+      bbox->y2 = bbox->y1 + face_data->patch_ly;
+      bbox->z1 = (*k) * face_data->patch_lz;
+      bbox->z2 = bbox->z1 + face_data->patch_lz;
+    }
+  }
   return result;
 }
 
 bool str_grid_face_data_next_z_patch(str_grid_face_data_t* face_data, int* pos, 
                                      int* i, int* j, int* k, 
-                                     str_grid_patch_t** z_patch)
+                                     str_grid_patch_t** z_patch,
+                                     bbox_t* bbox)
 {
   bool result = str_grid_next_patch(face_data->grid, pos, i, j, k);
   if (result)
+  {
     *z_patch = str_grid_face_data_z_patch(face_data, *i, *j, *k);
+    if (bbox != NULL)
+    {
+      bbox->x1 = (*i) * face_data->patch_lx;
+      bbox->x2 = bbox->x1 + face_data->patch_lx;
+      bbox->y1 = (*j) * face_data->patch_ly;
+      bbox->y2 = bbox->y1 + face_data->patch_ly;
+      bbox->z1 = (*k) * face_data->patch_lz;
+      bbox->z2 = bbox->z1 + face_data->patch_lz;
+    }
+  }
   return result;
 }
 
@@ -226,7 +266,7 @@ void str_grid_face_data_set_buffer(str_grid_face_data_t* face_data,
   // Point the patches at the buffer.
   int pos = 0, l = 0, ip, jp, kp;
   str_grid_patch_t* patch;
-  while (str_grid_face_data_next_x_patch(face_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_face_data_next_x_patch(face_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int patch_offset = face_data->patch_offsets[l];
     patch->data = &(((real_t*)buffer)[patch_offset]);
@@ -234,7 +274,7 @@ void str_grid_face_data_set_buffer(str_grid_face_data_t* face_data,
   }
 
   pos = 0;
-  while (str_grid_face_data_next_y_patch(face_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_face_data_next_y_patch(face_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int patch_offset = face_data->patch_offsets[l];
     patch->data = &(((real_t*)buffer)[patch_offset]);
@@ -242,7 +282,7 @@ void str_grid_face_data_set_buffer(str_grid_face_data_t* face_data,
   }
 
   pos = 0;
-  while (str_grid_face_data_next_z_patch(face_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_face_data_next_z_patch(face_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int patch_offset = face_data->patch_offsets[l];
     patch->data = &(((real_t*)buffer)[patch_offset]);

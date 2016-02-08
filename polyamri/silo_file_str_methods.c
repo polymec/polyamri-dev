@@ -305,7 +305,7 @@ void silo_file_write_str_grid_cell_data(silo_file_t* file,
 
   str_grid_patch_t* patch;
   int pos = 0, i, j, k, l = 0;
-  while (str_grid_cell_data_next_patch(cell_data, &pos, &i, &j, &k, &patch))
+  while (str_grid_cell_data_next_patch(cell_data, &pos, &i, &j, &k, &patch, NULL))
   {
     // Write out the patch data itself.
     for (int c = 0; c < num_components; ++c)

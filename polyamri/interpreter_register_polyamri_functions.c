@@ -14,8 +14,7 @@
 #include "lauxlib.h"
 
 static const char* structured_grid_usage = 
-  "structured_grid{domain = D,\n"
-  "                num_cells = {nx, ny, nz},\n"
+  "structured_grid{num_cells = {nx, ny, nz},\n"
   "                patch_size = {px, py, pz}}\n"
   "  Creates a structured grid spanning the given domain with the given\n"
   "  numbers of cells in the x, y, z directions, comprising patches of the\n"
@@ -25,16 +24,8 @@ static int structured_grid(lua_State* lua)
 {
   // Check the number of arguments.
   int num_args = lua_gettop(lua);
-  if (num_args != 3)
+  if (num_args != 2)
     return luaL_error(lua, structured_grid_usage);
-
-  // Parse the domain.
-  lua_pushstring(lua, "domain");
-  lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
-  if (!lua_isboundingbox(lua, -1))
-    return luaL_error(lua, structured_grid_usage);
-  bbox_t* domain = lua_toboundingbox(lua, -1);
-  lua_pop(lua, 1);
 
   // Parse the numbers of cells.
   int num_cells[3];
@@ -88,5 +79,12 @@ void interpreter_register_polyamri_functions(interpreter_t* interp)
 {
   interpreter_register_function(interp, "structured_grid", structured_grid, 
     docstring_from_string(structured_grid_usage));
+}
+
+str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name)
+{
+  // For now, we simply store structured grids as user-defined objects.
+  // Not "watertight," but we'll cross the validation bridge when we come to it.
+  return interpreter_get_user_defined(interp, name);
 }
 

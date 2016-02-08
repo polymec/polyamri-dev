@@ -11,6 +11,7 @@
 #include "polyamri/str_grid_face_data.h"
 #include "polyamri/str_ode_integrator.h"
 #include "polyamri/interpreter_register_polyamri_functions.h"
+#include "polyamri/grid_to_bbox_coord_mapping.h"
 #include "model/model.h"
 #include "integrators/ark_ode_integrator.h"
 
@@ -81,7 +82,7 @@ static int solid_body_rotation(lua_State* lua)
   snprintf(name, 1024, "Solid body rotation(x0 = (%g, %g, %g), alpha_dot = %g, beta_dot = %g, gamma_dot = %g)",
            x0->x, x0->y, x0->z, values[0], values[1], values[2]);
   st_func_vtable vtable = {.eval = sbr_eval, .dtor = polymec_free};
-  st_func_t* func = st_func_new(name, sbr, vtable, ST_FUNC_INHOMOGENEOUS, ST_FUNC_CONSTANT, 3);
+  st_func_t* func = st_func_new(name, sbr, vtable, ST_FUNC_HETEROGENEOUS, ST_FUNC_CONSTANT, 3);
 
   lua_pushvectorfunction(lua, func);
   return 1;
@@ -108,8 +109,11 @@ typedef struct
   bbox_t bbox;
   real_t dx, dy, dz;
 
-  // State information.
+  // Grid and computational domain.
   str_grid_t* grid;
+  coord_mapping_t* domain;
+
+  // State information.
   str_grid_cell_data_t* U;
 
   // Initial state.
@@ -131,13 +135,28 @@ static const char advect_desc[] = "PolyAMRI advection (str_advect)\n"
   "integrated in time using the method of lines.\n";
 
 static void advect_read_input(void* context, 
-                              interpreter_t* interpreter, 
+                              interpreter_t* interp, 
                               options_t* options)
 {
   advect_t* adv = context;
 
-  // Get grid information.
-//  mod->mesh = interpreter_get_mesh(interp, "mesh");
+  adv->U0 = interpreter_get_scalar_function(interp, "initial_state");
+  adv->V = interpreter_get_vector_function(interp, "velocity");
+  adv->grid = interpreter_get_str_grid(interp, "grid");
+
+  // Computational domain can either be a bounding box or a coordinate 
+  // mapping.
+  bbox_t* bbox = interpreter_get_bbox(interp, "domain");
+  if (bbox != NULL)
+    adv->domain = grid_to_bbox_coord_mapping_new(bbox);
+  else
+  {
+    coord_mapping_t* mapping = interpreter_get_coord_mapping(interp, "domain");
+    if (mapping != NULL)
+      adv->domain = mapping;
+    else
+      polymec_error("domain must be a bounding box or a coordinate mapping.");
+  }
 }
 
 static real_t advect_max_dt(void* context, real_t t, char* reason)
@@ -151,21 +170,22 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
   real_t V_max = 0.0;
   int pos = 0, ip, jp, kp;
   str_grid_patch_t* patch;
-  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch))
+  bbox_t bbox;
+  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch, &bbox))
   {
     point_t x;
     vector_t v;
 
     // x face velocities.
-    for (int i = 0; i <= adv->nx; ++i)
+    for (int i = patch->i1; i <= patch->i2; ++i)
     {
-      x.x = (ip * adv->nx + i) * adv->dx;
-      for (int j = 0; j < adv->ny; ++j)
+      x.x = bbox.x1 + i * adv->dx;
+      for (int j = patch->j1; j < patch->j2; ++j)
       {
-        x.y = (jp * adv->ny + (j + 0.5)) * adv->dy;
-        for (int k = 0; k < adv->nz; ++k)
+        x.y = bbox.y1 + (j + 0.5) * adv->dy;
+        for (int k = patch->k1; k < patch->k2; ++k)
         {
-          x.z = (kp * adv->nz + (k + 0.5)) * adv->dz;
+          x.z = bbox.z1 + (k + 0.5) * adv->dz;
           st_func_eval(adv->V, &x, t, (real_t*)&v);
           V_max = MAX(V_max, vector_mag(&v));
         }
@@ -173,15 +193,15 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
     }
 
     // y face velocities.
-    for (int i = 0; i < adv->nx; ++i)
+    for (int i = patch->i1; i < patch->i2; ++i)
     {
-      x.x = (ip * adv->nx + (i + 0.5)) * adv->dx;
-      for (int j = 0; j <= adv->ny; ++j)
+      x.x = bbox.x1 + (i + 0.5) * adv->dx;
+      for (int j = patch->j1; j <= patch->j2; ++j)
       {
-        x.y = (jp * adv->ny + j) * adv->dy;
-        for (int k = 0; k < adv->nz; ++k)
+        x.y = bbox.y1 + j * adv->dy;
+        for (int k = patch->k1; k < patch->k2; ++k)
         {
-          x.z = (kp * adv->nz + (k + 0.5)) * adv->dz;
+          x.z = bbox.z1 + (k + 0.5) * adv->dz;
           st_func_eval(adv->V, &x, t, (real_t*)&v);
           V_max = MAX(V_max, vector_mag(&v));
         }
@@ -189,15 +209,15 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
     }
 
     // z face velocities.
-    for (int i = 0; i < adv->nx; ++i)
+    for (int i = patch->i1; i < patch->i2; ++i)
     {
-      x.x = (ip * adv->nx + (i + 0.5)) * adv->dx;
-      for (int j = 0; j < adv->ny; ++j)
+      x.x = bbox.x1 + (i + 0.5) * adv->dx;
+      for (int j = patch->j1; j < patch->j2; ++j)
       {
-        x.y = (jp * adv->ny + (j + 0.5)) * adv->dy;
-        for (int k = 0; k <= adv->nz; ++k)
+        x.y = bbox.y1 + (j + 0.5) * adv->dy;
+        for (int k = patch->k1; k <= patch->k2; ++k)
         {
-          x.z = (kp * adv->nz + k) * adv->dz;
+          x.z = bbox.z1 + k * adv->dz;
           st_func_eval(adv->V, &x, t, (real_t*)&v);
           V_max = MAX(V_max, vector_mag(&v));
         }
@@ -241,11 +261,12 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   // Now go over each cell and compute fluxes.
   int pos, ip, jp, kp;
   str_grid_patch_t* face_patch;
+  bbox_t bbox;
   
   // x fluxes.
   pos = 0;
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
-  while (str_grid_face_data_next_x_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch))
+  while (str_grid_face_data_next_x_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
     str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
@@ -253,17 +274,14 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     point_t x_low, x_high;
     for (int i = face_patch->i1; i < face_patch->i2; ++i)
     {
-      int I = i - face_patch->i1;
-      x_low.x = (ip * adv->nx + I) * dx;
+      x_low.x = bbox.x1 + i*dx;
       x_high.x = x_low.x + dx;
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
-        int J = j - face_patch->j1;
-        x_low.y = x_high.y = (jp * adv->ny + J) * dy;
+        x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
         for (int k = face_patch->k1; k < face_patch->k2; ++k)
         {
-          int K = k - face_patch->k1;
-          x_low.z = x_high.z = (kp * adv->nz + K) * dz;
+          x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces.
           vector_t v_low, v_high;
@@ -284,7 +302,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 
   // y fluxes.
   pos = 0;
-  while (str_grid_face_data_next_y_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch))
+  while (str_grid_face_data_next_y_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
     str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
@@ -292,17 +310,14 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     point_t x_low, x_high;
     for (int i = face_patch->i1; i < face_patch->i2; ++i)
     {
-      int I = i - face_patch->i1;
-      x_low.x = x_high.x = (ip * adv->nx + I) * dx;
+      x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
-        int J = j - face_patch->j1;
-        x_low.y = (jp * adv->ny + (J+0.5)) * dy;
+        x_low.y = bbox.y1 + j * dy;
         x_high.y = x_low.y + dy;
         for (int k = face_patch->k1; k < face_patch->k2; ++k)
         {
-          int K = k - face_patch->k1;
-          x_low.z = x_high.z = (kp * adv->nz + (K+0.5)) * dz;
+          x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces.
           vector_t v_low, v_high;
@@ -323,7 +338,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
 
   // z fluxes.
   pos = 0;
-  while (str_grid_face_data_next_z_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch))
+  while (str_grid_face_data_next_z_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
     str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
@@ -331,16 +346,13 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     point_t x_low, x_high;
     for (int i = face_patch->i1; i < face_patch->i2; ++i)
     {
-      int I = i - face_patch->i1;
-      x_low.x = x_high.x = (ip * adv->nx + (I+0.5)) * dx;
+      x_low.x = x_high.x = bbox.x1 + (i+0.5)*dx;
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
-        int J = j - face_patch->j1;
-        x_low.y = x_high.y = (jp * adv->ny + (J+0.5)) * dy;
+        x_low.x = x_high.y = bbox.y1 + (j+0.5)*dy;
         for (int k = face_patch->k1; k < face_patch->k2; ++k)
         {
-          int K = k - face_patch->k1;
-          x_low.z = (kp * adv->nz + K) * dz;
+          x_low.z = bbox.z1 + k*dz;
           x_high.z = x_low.z + dz;
 
           // Get the velocity at the low and high faces.
@@ -367,7 +379,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
   pos = 0;
   str_grid_patch_t* rhs_patch;
-  while (str_grid_cell_data_next_patch(adv->dUdt_work, &pos, &ip, &jp, &kp, &rhs_patch))
+  while (str_grid_cell_data_next_patch(adv->dUdt_work, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
   {
     str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
     str_grid_patch_t* y_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
@@ -459,22 +471,20 @@ static void advect_init(void* context, real_t t)
   // Initialize the state.
   int pos = 0, ip, jp, kp;
   str_grid_patch_t* patch;
-  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch))
+  bbox_t bbox;
+  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch, &bbox))
   {
     DECLARE_STR_GRID_PATCH_ARRAY(U, patch);
     point_t x;
     for (int i = patch->i1; i < patch->i2; ++i)
     {
-      int I = i - patch->i1;
-      x.x = (ip * adv->nx + (I + 0.5)) * adv->dx;
+      x.x = bbox.x1 + (i + 0.5) * adv->dx;
       for (int j = patch->j1; j < patch->j2; ++j)
       {
-        int J = j - patch->j1;
-        x.y = (jp * adv->ny + (J + 0.5)) * adv->dy;
+        x.y = bbox.y1 + (j + 0.5) * adv->dy;
         for (int k = patch->k1; k < patch->k2; ++k)
         {
-          int K = j - patch->k1;
-          x.z = (kp * adv->nz + (K + 0.5)) * adv->dz;
+          x.z = bbox.z1 + (k + 0.5) * adv->dz;
           st_func_eval(adv->U0, &x, t, &U[i][j][k][0]);
         }
       }

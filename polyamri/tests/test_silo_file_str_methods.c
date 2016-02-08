@@ -69,7 +69,7 @@ void test_write_str_grid_cell_data(void** state)
   // Fill it with goodness.
   int pos = 0, I, J, K;
   str_grid_patch_t* patch;
-  while (str_grid_cell_data_next_patch(solution, &pos, &I, &J, &K, &patch))
+  while (str_grid_cell_data_next_patch(solution, &pos, &I, &J, &K, &patch, NULL))
   {
     DECLARE_STR_GRID_PATCH_ARRAY(a, patch);
     for (int i = patch->i1; i < patch->i2; ++i)

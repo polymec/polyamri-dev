@@ -19,6 +19,10 @@ struct str_grid_cell_data_t
   void* buffer;
   bool owns_buffer;
 
+  // Patch and cell spacing in logical space.
+  real_t patch_lx, patch_ly, patch_lz;
+  real_t dx, dy, dz;
+
   int token;
 };
 
@@ -33,7 +37,7 @@ static void count_cells(str_grid_cell_data_t* cell_data)
   str_grid_patch_t* patch;
   cell_data->num_interior_cells = cell_data->total_num_cells = 0;
   cell_data->patch_offsets[0] = 0;
-  while (str_grid_cell_data_next_patch(cell_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_cell_data_next_patch(cell_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int nx = patch->i2 - patch->i1, nxg = nx + 2*patch->ng;
     int ny = patch->j2 - patch->j1, nyg = ny + 2*patch->ng;
@@ -91,6 +95,12 @@ str_grid_cell_data_t* str_grid_cell_data_with_buffer(str_grid_t* grid,
     ++l;
   }
 
+  cell_data->patch_lx = 1.0 / px;
+  cell_data->dx = cell_data->patch_lx / cell_data->nx;
+  cell_data->patch_ly = 1.0 / py;
+  cell_data->dy = cell_data->patch_ly / cell_data->ny;
+  cell_data->patch_lz = 1.0 / pz;
+  cell_data->dz = cell_data->patch_lz / cell_data->nz;
   count_cells(cell_data);
 
   cell_data->token = -1; // No data in flight.
@@ -147,11 +157,23 @@ str_grid_patch_t* str_grid_cell_data_patch(str_grid_cell_data_t* cell_data, int 
 
 bool str_grid_cell_data_next_patch(str_grid_cell_data_t* cell_data, int* pos, 
                                    int* i, int* j, int* k, 
-                                   str_grid_patch_t** patch)
+                                   str_grid_patch_t** patch,
+                                   bbox_t* bbox)
 {
   bool result = str_grid_next_patch(cell_data->grid, pos, i, j, k);
   if (result)
+  {
     *patch = str_grid_cell_data_patch(cell_data, *i, *j, *k);
+    if (bbox != NULL)
+    {
+      bbox->x1 = (*i) * cell_data->patch_lx - cell_data->ng * cell_data->dx;
+      bbox->x2 = ((*i)+1) * cell_data->patch_lx + cell_data->ng * cell_data->dx;
+      bbox->y1 = (*j) * cell_data->patch_ly - cell_data->ng * cell_data->dy;
+      bbox->y2 = ((*j)+1) * cell_data->patch_ly + cell_data->ng * cell_data->dy;
+      bbox->z1 = (*k) * cell_data->patch_lz - cell_data->ng * cell_data->dz;
+      bbox->z2 = ((*k)+1) * cell_data->patch_lz + cell_data->ng * cell_data->dz;
+    }
+  }
   return result;
 }
 
@@ -189,7 +211,7 @@ void str_grid_cell_data_set_buffer(str_grid_cell_data_t* cell_data,
   // Point the patches at the buffer.
   int pos = 0, l = 0, ip, jp, kp;
   str_grid_patch_t* patch;
-  while (str_grid_cell_data_next_patch(cell_data, &pos, &ip, &jp, &kp, &patch))
+  while (str_grid_cell_data_next_patch(cell_data, &pos, &ip, &jp, &kp, &patch, NULL))
   {
     int patch_offset = cell_data->patch_offsets[l];
     patch->data = &(((real_t*)buffer)[patch_offset]);

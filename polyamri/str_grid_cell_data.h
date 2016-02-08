@@ -61,9 +61,13 @@ str_grid_patch_t* str_grid_cell_data_patch(str_grid_cell_data_t* cell_data, int 
 
 // Traverses the grid data, returning true if a patch was found and false if not.
 // Set *pos to 0 to reset the traversal. patch is set to the cell patch.
+// Additionally, if bbox is non-NULL, its fields x1, x2, y1, y2, z1, z2 will 
+// be set to the coordinates (in logical space) of the patch's extent, 
+// including ghost cells.
 bool str_grid_cell_data_next_patch(str_grid_cell_data_t* cell_data, int* pos, 
                                    int* i, int* j, int* k, 
-                                   str_grid_patch_t** patch);
+                                   str_grid_patch_t** patch,
+                                   bbox_t* bbox);
 
 // Fills all ghost values in the str_grid_cell_data's patches.
 void str_grid_cell_data_fill_ghosts(str_grid_cell_data_t* cell_data);
