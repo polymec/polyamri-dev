@@ -301,8 +301,13 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
           st_func_eval(adv->V, &x_high, t, (real_t*)&v_high);
 
           // Get the upwinded values of U at the low and high faces.
-          real_t U_low = (v_low.x >= 0.0) ? U[i-1][j][k][0] : U[i][j][k][0];
-          real_t U_high = (v_high.x >= 0.0) ? U[i][j][k][0] : U[i+1][j][k][0];
+          // Note that since i, j, k are face indices, we need to 
+          // translate them to cell indices.
+          int ic, jc, kc; // <-- cell indices
+          str_grid_patch_translate_indices(face_patch, i, j, k,
+                                           cell_patch, &ic, &jc, &kc);
+          real_t U_low = (v_low.x >= 0.0) ? U[ic-1][jc][kc][0] : U[ic][jc][kc][0];
+          real_t U_high = (v_high.x >= 0.0) ? U[ic][jc][kc][0] : U[ic+1][jc][kc][0];
 
           // Compute the low and high fluxes.
           F[i][j][k][0]   = U_low * v_low.x;
@@ -337,12 +342,17 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
           st_func_eval(adv->V, &x_high, t, (real_t*)&v_high);
 
           // Get the upwinded values of U at the low and high faces.
-          real_t U_low = (v_low.y >= 0.0) ? U[i][j-1][k][0] : U[i][j][k][0];
-          real_t U_high = (v_high.y >= 0.0) ? U[i][j][k][0] : U[i][j+1][k][0];
+          // Note that since i, j, k are face indices, we need to 
+          // translate them to cell indices.
+          int ic, jc, kc; // <-- cell indices
+          str_grid_patch_translate_indices(face_patch, i, j, k,
+                                           cell_patch, &ic, &jc, &kc);
+          real_t U_low = (v_low.y >= 0.0) ? U[ic][jc-1][kc][0] : U[ic][jc][kc][0];
+          real_t U_high = (v_high.y >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc+1][kc][0];
 
           // Compute the low and high fluxes.
           F[i][j][k][0]   = U_low * v_low.y;
-          F[i+1][j][k][0] = U_high * v_high.y;
+          F[i][j+1][k][0] = U_high * v_high.y;
         }
       }
     }
@@ -373,12 +383,17 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
           st_func_eval(adv->V, &x_high, t, (real_t*)&v_high);
 
           // Get the upwinded values of U at the low and high faces.
-          real_t U_low = (v_low.z >= 0.0) ? U[i][j][k-1][0] : U[i][j][k][0];
-          real_t U_high = (v_high.z >= 0.0) ? U[i][j][k][0] : U[i][j][k+1][0];
+          // Note that since i, j, k are face indices, we need to 
+          // translate them to cell indices.
+          int ic, jc, kc; // <-- cell indices
+          str_grid_patch_translate_indices(face_patch, i, j, k,
+                                           cell_patch, &ic, &jc, &kc);
+          real_t U_low = (v_low.z >= 0.0) ? U[ic][jc][kc-1][0] : U[ic][jc][kc][0];
+          real_t U_high = (v_high.z >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc][kc+1][0];
 
           // Compute the low and high fluxes.
           F[i][j][k][0]   = U_low * v_low.z;
-          F[i+1][j][k][0] = U_high * v_high.z;
+          F[i][j][k+1][0] = U_high * v_high.z;
         }
       }
     }
@@ -407,6 +422,10 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
       {
         for (int k = rhs_patch->k1; k < rhs_patch->k2; ++k)
         {
+          // dUdt and the fluxes happen to share similar indexing, since 
+          // they have no ghost values. The only difference is that the 
+          // fluxes have an extra datum in their preferred direction.
+          // But no index translation is needed here.
           real_t div_F = Ax * (Fx[i+1][j][k][0] - Fx[i][j][k][0]) + 
                          Ay * (Fy[i][j+1][k][0] - Fy[i][j][k][0]) + 
                          Az * (Fz[i][j][k+1][0] - Fz[i][j][k][0]);
@@ -492,7 +511,7 @@ static void advect_setup(advect_t* adv)
 
   // Create work "vectors."
   adv->U_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
-  adv->dUdt_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
+  adv->dUdt_work = str_grid_cell_data_with_buffer(adv->grid, 1, 0, NULL);
   adv->F_work = str_grid_face_data_new(adv->grid, 1);
 
   // Create the ARK integrator.

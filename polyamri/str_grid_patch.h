@@ -67,5 +67,17 @@ str_grid_patch_t* str_grid_patch_clone(str_grid_patch_t* patch);
 // Frees the given structured grid patch.
 void str_grid_patch_free(str_grid_patch_t* patch);
 
+// Translates a set of indices (i, j, k) in the given patch to a 
+// new set (i1, i1, k1) within a destination patch.
+static inline void str_grid_patch_translate_indices(str_grid_patch_t* patch,
+                                                    int i, int j, int k,
+                                                    str_grid_patch_t* dest_patch,
+                                                    int* i1, int* j1, int* k1)
+{
+  *i1 = i - patch->i1 + dest_patch->i1;
+  *j1 = j - patch->j1 + dest_patch->j1;
+  *k1 = k - patch->k1 + dest_patch->k1;
+}
+
 #endif
 
