@@ -2,7 +2,7 @@
 -- rigid body rotation.
 
 -- Initial condition.
--- ball_and_jack(ball_radius, jack_size)
+-- ball_and_jack(x0, ball_radius, ball_value, jack_size, jack_value)
 initial_state = ball_and_jack({0, 0, 0}, 0.1, 1.0, 0.07, 2.0)
 
 -- Rotational velocity in terms of Euler angles describing a rigid body in 

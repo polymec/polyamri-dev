@@ -29,8 +29,8 @@ static int structured_grid(lua_State* lua)
 
   // Parse the numbers of cells.
   int num_cells[3];
-  lua_pushstring(lua, "num_cells");
-  lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
+  lua_pushstring(lua, "num_cells"); // pushes key onto stack
+  lua_gettable(lua, 1); // replaces key with value
   if (!lua_issequence(lua, -1))
     return luaL_error(lua, structured_grid_usage);
   int len;
@@ -43,9 +43,9 @@ static int structured_grid(lua_State* lua)
 
   // Parse the patch dimensions.
   int patch_size[3];
-  lua_pushstring(lua, "patch_size");
-  lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
-  if (!lua_issequence(lua, -1))
+  lua_pushstring(lua, "patch_size"); // pushes key onto stack
+  lua_gettable(lua, 1); // replaces key with value
+  if (!lua_issequence(lua, -1)) 
     return luaL_error(lua, structured_grid_usage);
   seq = lua_tosequence(lua, -1, &len);
   if (len != 3)

@@ -50,25 +50,24 @@ static int rigid_body_rotation(lua_State* lua)
 {
   // Check the number of arguments.
   int num_args = lua_gettop(lua);
-  if (num_args != 1)
+  if ((num_args != 1) || !lua_istable(lua, 1))
     return luaL_error(lua, rigid_body_rotation_usage);
 
   // Get the origin if it's given.
-  lua_pushstring(lua, "origin");
-  lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
-printf("%s\n", lua_tostring(lua, -1));
+  lua_pushstring(lua, "origin"); // pushes key onto stack
+  lua_gettable(lua, 1); // replaces key with value
   if (!lua_isnil(lua, -1) && !lua_ispoint(lua, -1))
     return luaL_error(lua, rigid_body_rotation_usage);
   point_t* x0 = lua_topoint(lua, -1);
   lua_pop(lua, 1);
 
+  // Get the rotation rates for the Euler angles.
   const char* entries[] = {"alpha_dot", "beta_dot", "gamma_dot"};
   real_t values[3];
   for (int i = 0; i < 3; ++i)
   {
-    lua_pushstring(lua, entries[i]);
-    lua_gettable(lua, 1); // Reads name from top, replaces with bounds[name].
-printf("%s\n", lua_tostring(lua, -1));
+    lua_pushstring(lua, entries[i]); // pushes key onto stack
+    lua_gettable(lua, 1); // replaces key with value
     if (lua_isnil(lua, -1) || !lua_isnumber(lua, -1))
       return luaL_error(lua, rigid_body_rotation_usage);
     values[i] = (real_t)lua_tonumber(lua, -1); 
