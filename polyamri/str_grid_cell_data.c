@@ -81,6 +81,7 @@ str_grid_cell_data_t* str_grid_cell_data_with_buffer(str_grid_t* grid,
   str_grid_get_extents(grid, &cell_data->nx, &cell_data->ny, &cell_data->nz);
   cell_data->patches = int_ptr_unordered_map_new();
   cell_data->patch_offsets = polymec_malloc(sizeof(int) * (num_patches+1));
+  cell_data->buffer = NULL;
 
   // Now populate the patches (with NULL buffers).
   int px, py, pz;

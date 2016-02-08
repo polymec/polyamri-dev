@@ -97,6 +97,7 @@ str_grid_face_data_t* str_grid_face_data_with_buffer(str_grid_t* grid,
   face_data->y_patches = int_ptr_unordered_map_new();
   face_data->z_patches = int_ptr_unordered_map_new();
   face_data->patch_offsets = polymec_malloc(sizeof(int) * (3*num_patches+1));
+  face_data->buffer = NULL;
 
   // Now populate the patches for x-, y-, and z-faces.
   int px, py, pz;

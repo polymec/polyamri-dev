@@ -40,6 +40,9 @@ str_grid_patch_filler_t* str_grid_patch_filler_new(const char* name,
                                                    void* context,
                                                    str_grid_patch_filler_vtable vtable);
 
+// Returns an internal pointer to the name of the given patch filler.
+char* str_grid_patch_filler_name(str_grid_patch_filler_t* filler);
+
 // Start filling the ghost cells in the given patch (situated at patch coordinates (i, j, k)
 // in its underlying grid) asynchronously, returning a non-negative token that can be used 
 // later to finish the operation, or -1 if the process is completed synchronously.
@@ -58,9 +61,12 @@ void str_grid_patch_filler_finish(str_grid_patch_filler_t* filler,
 
 // Creates a patch filler that copies local values from one patch on a grid to 
 // another.
-str_grid_patch_filler_t* copy_str_grid_patch_filler_new(str_grid_t* grid,
-                                                        str_grid_patch_boundary_t src_boundary,
+str_grid_patch_filler_t* copy_str_grid_patch_filler_new(str_grid_patch_boundary_t src_boundary,
                                                         str_grid_patch_boundary_t dest_boundary);
+
+// Creates a patch filler that fills ghost cells so that there is zero flux 
+// through the given patch boundary.
+str_grid_patch_filler_t* zero_flux_str_grid_patch_filler_new(str_grid_patch_boundary_t patch_boundary);
 
 #endif
 

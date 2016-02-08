@@ -197,19 +197,25 @@ int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* d
 
   // Begin the ghost fill operations and gather tokens.
   int pos = 0, patch_index;
-  str_grid_patch_filler_t* filler;
-  while (int_ptr_unordered_map_next(grid->patch_fillers, &pos, &patch_index, (void**)&filler))
+  ptr_array_t* fillers;
+  while (int_ptr_unordered_map_next(grid->patch_fillers, &pos, &patch_index, (void**)&fillers))
   {
     int i, j, k;
     get_patch_indices(grid, patch_index, &i, &j, &k);
-    int op_token = str_grid_patch_filler_start(filler, i, j, k, data);
-    ASSERT((op_token >= 0) || (op_token == -1));
 
-    if (op_token != -1) // No finish operation.
+    // Go through all the fillers for this patch.
+    for (int l = 0; l < fillers->size; ++l)
     {
-      // We stash both the patch index and the op token.
-      int_array_append(op_tokens, patch_index);
-      int_array_append(op_tokens, op_token);
+      str_grid_patch_filler_t* filler = fillers->data[l];
+      int op_token = str_grid_patch_filler_start(filler, i, j, k, data);
+      ASSERT((op_token >= 0) || (op_token == -1));
+
+      if (op_token != -1) // -1 <-> no finish operation.
+      {
+        // We stash both the patch index and the op token.
+        int_array_append(op_tokens, patch_index);
+        int_array_append(op_tokens, op_token);
+      }
     }
   }
 

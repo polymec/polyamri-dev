@@ -41,9 +41,18 @@ typedef struct
 static void sbr_eval(void* context, point_t* x, real_t t, real_t* val)
 {
   sbr_t* sbr = context;
-  vector_t R;
-  point_displacement(&sbr->x0, x, &R);
-  // FIXME
+
+  // Rotational pseudovector omega.
+  vector_t omega = {.x = sbr->alpha_dot,
+                    .y = sbr->beta_dot,
+                    .z = sbr->gamma_dot};
+
+  // Displacement vector r.
+  vector_t r;
+  point_displacement(&sbr->x0, x, &r);
+
+  // V = dr/dt = omega x r.
+  vector_cross(&omega, &r, (vector_t*)val);
 }
 
 static int rigid_body_rotation(lua_State* lua)
@@ -352,7 +361,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
       x_low.x = x_high.x = bbox.x1 + (i+0.5)*dx;
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
-        x_low.x = x_high.y = bbox.y1 + (j+0.5)*dy;
+        x_low.y = x_high.y = bbox.y1 + (j+0.5)*dy;
         for (int k = face_patch->k1; k < face_patch->k2; ++k)
         {
           x_low.z = bbox.z1 + k*dz;
@@ -418,13 +427,21 @@ static void advect_setup(advect_t* adv)
   advect_clear(adv);
 
   // Here we set up the machinery to fill ghost cells in the grid.
-  str_grid_patch_filler_t* fill_from_west = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_X1_BOUNDARY, STR_GRID_PATCH_X2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_east = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_X2_BOUNDARY, STR_GRID_PATCH_X1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_north = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Y2_BOUNDARY, STR_GRID_PATCH_Y1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_south = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Y1_BOUNDARY, STR_GRID_PATCH_Y2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_below = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Z1_BOUNDARY, STR_GRID_PATCH_Z2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_above = copy_str_grid_patch_filler_new(adv->grid, STR_GRID_PATCH_Z2_BOUNDARY, STR_GRID_PATCH_Z1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_boundary = NULL;
+  str_grid_patch_filler_t* fill_from_east = copy_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY, STR_GRID_PATCH_X2_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_west = copy_str_grid_patch_filler_new(STR_GRID_PATCH_X2_BOUNDARY, STR_GRID_PATCH_X1_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_south = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Y2_BOUNDARY, STR_GRID_PATCH_Y1_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_north = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Y1_BOUNDARY, STR_GRID_PATCH_Y2_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_above = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY, STR_GRID_PATCH_Z2_BOUNDARY);
+  str_grid_patch_filler_t* fill_from_below = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY, STR_GRID_PATCH_Z1_BOUNDARY);
+
+  // We impose a zero flux on all boundaries, on the assumption that the 
+  // solution is zero at the boundary.
+  str_grid_patch_filler_t* zero_x1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY);
+  str_grid_patch_filler_t* zero_x2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X2_BOUNDARY);
+  str_grid_patch_filler_t* zero_y1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Y1_BOUNDARY);
+  str_grid_patch_filler_t* zero_y2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Y2_BOUNDARY);
+  str_grid_patch_filler_t* zero_z1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY);
+  str_grid_patch_filler_t* zero_z2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY);
 
   int npx, npy, npz;
   str_grid_get_extents(adv->grid, &npx, &npy, &npz);
@@ -435,27 +452,27 @@ static void advect_setup(advect_t* adv)
     if (ip > 0)
       str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_west);
     else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_x1);
     if (ip < npx-1)
       str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_east);
     else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_x2);
     if (jp > 0)
       str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_south);
     else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_y1);
     if (jp < npy-1)
       str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_north);
     else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_y2);
     if (kp > 0)
       str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_below);
     else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_z1);
     if (kp < npz-1)
       str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_above);
     else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_boundary);
+      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_z2);
   }
 
   // Set the grid spacings.

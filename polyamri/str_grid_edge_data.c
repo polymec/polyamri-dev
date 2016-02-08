@@ -97,6 +97,7 @@ str_grid_edge_data_t* str_grid_edge_data_with_buffer(str_grid_t* grid,
   edge_data->y_patches = int_ptr_unordered_map_new();
   edge_data->z_patches = int_ptr_unordered_map_new();
   edge_data->patch_offsets = polymec_malloc(sizeof(int) * (3*num_patches+1));
+  edge_data->buffer = NULL;
 
   // Now populate the patches for x-, y-, and z-edges.
   int px, py, pz;
