@@ -135,6 +135,7 @@ void str_grid_face_data_free(str_grid_face_data_t* face_data)
   int_ptr_unordered_map_free(face_data->x_patches);
   int_ptr_unordered_map_free(face_data->y_patches);
   int_ptr_unordered_map_free(face_data->z_patches);
+  polymec_free(face_data->patch_offsets);
   if (face_data->owns_buffer)
     polymec_free(face_data->buffer);
   polymec_free(face_data);

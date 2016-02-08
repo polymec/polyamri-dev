@@ -135,6 +135,7 @@ void str_grid_edge_data_free(str_grid_edge_data_t* edge_data)
   int_ptr_unordered_map_free(edge_data->x_patches);
   int_ptr_unordered_map_free(edge_data->y_patches);
   int_ptr_unordered_map_free(edge_data->z_patches);
+  polymec_free(edge_data->patch_offsets);
   if (edge_data->owns_buffer)
     polymec_free(edge_data->buffer);
   polymec_free(edge_data);

@@ -30,7 +30,7 @@ str_grid_patch_filler_t* str_grid_patch_filler_new(const char* name,
                                                    str_grid_patch_filler_vtable vtable)
 {
   ASSERT(vtable.start_filling_cells != NULL);
-  str_grid_patch_filler_t* filler = polymec_malloc(sizeof(str_grid_patch_filler_t));
+  str_grid_patch_filler_t* filler = GC_MALLOC(sizeof(str_grid_patch_filler_t));
   filler->name = string_dup(name);
   filler->context = context;
   filler->vtable = vtable;
