@@ -122,6 +122,7 @@ str_grid_edge_data_t* str_grid_edge_data_with_buffer(str_grid_t* grid,
                                              str_grid_patch_with_buffer(px, py, pz+1, num_components, 0, NULL),
                                              DTOR(str_grid_patch_free));
   }
+  count_edges(edge_data);
 
   // Set the buffer.
   str_grid_edge_data_set_buffer(edge_data, buffer, false);
