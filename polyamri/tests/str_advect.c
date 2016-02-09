@@ -24,35 +24,28 @@
 #include "lauxlib.h"
 
 static const char* rigid_body_rotation_usage = 
-  "V = rigid_body_rotation{origin = x0, alpha_dot = A, beta_dot = B, gamma_dot = C}\n"
+  "V = rigid_body_rotation{origin = (x0, y0, z0), angular_velocity = (wx, wy, wz)}\n"
   "  Creates a velocity field representing a rigid body rotating in 3D space.\n"
   "  Arguments are:\n"
-  "    origin    - Point about which the body rotates.\n"
-  "    alpha_dot - Rotational velocity about the Euler angle alpha.\n"
-  "    beta_dot  - Rotational velocity about the Euler angle beta.\n"
-  "    gamma_dot - Rotational velocity about the Euler angle gamma.";
+  "    origin           - Point about which the body rotates.\n"
+  "    angular_velocity - Angular velocity (pseudo)vector describing the rotation.";
 
 typedef struct 
 {
-  point_t x0;
-  real_t alpha_dot, beta_dot, gamma_dot;
+  point_t x0; // center of rotation
+  vector_t omega; // Angular velocity pseudovector.
 } sbr_t;
 
 static void sbr_eval(void* context, point_t* x, real_t t, real_t* val)
 {
   sbr_t* sbr = context;
 
-  // Rotational pseudovector omega.
-  vector_t omega = {.x = sbr->alpha_dot,
-                    .y = sbr->beta_dot,
-                    .z = sbr->gamma_dot};
-
   // Displacement vector r.
   vector_t r;
   point_displacement(&sbr->x0, x, &r);
 
   // V = dr/dt = omega x r.
-  vector_cross(&omega, &r, (vector_t*)val);
+  vector_cross(&sbr->omega, &r, (vector_t*)val);
 }
 
 static int rigid_body_rotation(lua_State* lua)
@@ -70,31 +63,26 @@ static int rigid_body_rotation(lua_State* lua)
   point_t* x0 = lua_topoint(lua, -1);
   lua_pop(lua, 1);
 
-  // Get the rotation rates for the Euler angles.
-  const char* entries[] = {"alpha_dot", "beta_dot", "gamma_dot"};
-  real_t values[3];
-  for (int i = 0; i < 3; ++i)
-  {
-    lua_pushstring(lua, entries[i]); // pushes key onto stack
-    lua_gettable(lua, 1); // replaces key with value
-    if (lua_isnil(lua, -1) || !lua_isnumber(lua, -1))
-      return luaL_error(lua, rigid_body_rotation_usage);
-    values[i] = (real_t)lua_tonumber(lua, -1); 
-    lua_pop(lua, 1);
-  }
+  // Get the angular velocity vector.
+  lua_pushstring(lua, "angular_velocity"); // pushes key onto stack
+  lua_gettable(lua, 1); // replaces key with value
+  if (lua_isnil(lua, -1) || !lua_isvector(lua, -1))
+    return luaL_error(lua, rigid_body_rotation_usage);
+  vector_t* omega = lua_tovector(lua, -1);
+  lua_pop(lua, 1);
 
-  // Create and return the function.
+  // Set up the rigid body rotation thingy.
   sbr_t* sbr = polymec_malloc(sizeof(sbr_t));
   if (x0 != NULL)
     sbr->x0 = *x0;
   else
     sbr->x0.x = sbr->x0.y = sbr->x0.z = 0.0;
-  sbr->alpha_dot = values[0];
-  sbr->beta_dot = values[1];
-  sbr->gamma_dot = values[2];
+  sbr->omega = *omega;
+
+  // Create and return the function.
   char name[1025];
-  snprintf(name, 1024, "Rigid body rotation(x0 = (%g, %g, %g), alpha_dot = %g, beta_dot = %g, gamma_dot = %g)",
-           x0->x, x0->y, x0->z, values[0], values[1], values[2]);
+  snprintf(name, 1024, "Rigid body rotation(x0 = (%g, %g, %g), omega = (%g, %g, %g))",
+           sbr->x0.x, sbr->x0.y, sbr->x0.z, omega->x, omega->y, omega->z);
   st_func_vtable vtable = {.eval = sbr_eval, .dtor = polymec_free};
   st_func_t* func = st_func_new(name, sbr, vtable, ST_FUNC_HETEROGENEOUS, ST_FUNC_CONSTANT, 3);
 
@@ -129,6 +117,7 @@ typedef struct
 
   // Velocity field.
   st_func_t* V;
+  real_t V_max;
 
   // Time integrator and work vectors.
   str_ode_integrator_t* integ;
@@ -172,69 +161,73 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
   advect_t* adv = context;
   real_t dx = MIN(adv->dx, MIN(adv->dy, adv->dz));
 
-  // We compute the maximum allowable timestep using the CFL condition, 
-  // measuring the velocity at each of the face centers at the given time and 
-  // taking the max.
-  real_t V_max = 0.0;
-  int pos = 0, ip, jp, kp;
-  str_grid_patch_t* patch;
-  bbox_t bbox;
-  while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch, &bbox))
+  if ((adv->V_max == -FLT_MAX) || !st_func_is_constant(adv->V))
   {
-    point_t x;
-    vector_t v;
-
-    // x face velocities.
-    for (int i = patch->i1; i <= patch->i2; ++i)
+    // We compute the maximum allowable timestep using the CFL condition, 
+    // measuring the velocity at each of the face centers at the given time and 
+    // taking the max.
+    int pos = 0, ip, jp, kp;
+    str_grid_patch_t* patch;
+    bbox_t bbox;
+    while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch, &bbox))
     {
-      x.x = bbox.x1 + i * adv->dx;
-      for (int j = patch->j1; j < patch->j2; ++j)
+      point_t x;
+      vector_t v;
+
+      // x face velocities.
+      for (int i = patch->i1; i <= patch->i2; ++i)
       {
-        x.y = bbox.y1 + (j + 0.5) * adv->dy;
-        for (int k = patch->k1; k < patch->k2; ++k)
+        x.x = bbox.x1 + i * adv->dx;
+        for (int j = patch->j1; j < patch->j2; ++j)
         {
-          x.z = bbox.z1 + (k + 0.5) * adv->dz;
-          st_func_eval(adv->V, &x, t, (real_t*)&v);
-          V_max = MAX(V_max, vector_mag(&v));
+          x.y = bbox.y1 + (j + 0.5) * adv->dy;
+          for (int k = patch->k1; k < patch->k2; ++k)
+          {
+            x.z = bbox.z1 + (k + 0.5) * adv->dz;
+            st_func_eval(adv->V, &x, t, (real_t*)&v);
+            adv->V_max = MAX(adv->V_max, vector_mag(&v));
+          }
         }
       }
-    }
 
-    // y face velocities.
-    for (int i = patch->i1; i < patch->i2; ++i)
-    {
-      x.x = bbox.x1 + (i + 0.5) * adv->dx;
-      for (int j = patch->j1; j <= patch->j2; ++j)
+      // y face velocities.
+      for (int i = patch->i1; i < patch->i2; ++i)
       {
-        x.y = bbox.y1 + j * adv->dy;
-        for (int k = patch->k1; k < patch->k2; ++k)
+        x.x = bbox.x1 + (i + 0.5) * adv->dx;
+        for (int j = patch->j1; j <= patch->j2; ++j)
         {
-          x.z = bbox.z1 + (k + 0.5) * adv->dz;
-          st_func_eval(adv->V, &x, t, (real_t*)&v);
-          V_max = MAX(V_max, vector_mag(&v));
+          x.y = bbox.y1 + j * adv->dy;
+          for (int k = patch->k1; k < patch->k2; ++k)
+          {
+            x.z = bbox.z1 + (k + 0.5) * adv->dz;
+            st_func_eval(adv->V, &x, t, (real_t*)&v);
+            adv->V_max = MAX(adv->V_max, vector_mag(&v));
+          }
         }
       }
-    }
 
-    // z face velocities.
-    for (int i = patch->i1; i < patch->i2; ++i)
-    {
-      x.x = bbox.x1 + (i + 0.5) * adv->dx;
-      for (int j = patch->j1; j < patch->j2; ++j)
+      // z face velocities.
+      for (int i = patch->i1; i < patch->i2; ++i)
       {
-        x.y = bbox.y1 + (j + 0.5) * adv->dy;
-        for (int k = patch->k1; k <= patch->k2; ++k)
+        x.x = bbox.x1 + (i + 0.5) * adv->dx;
+        for (int j = patch->j1; j < patch->j2; ++j)
         {
-          x.z = bbox.z1 + k * adv->dz;
-          st_func_eval(adv->V, &x, t, (real_t*)&v);
-          V_max = MAX(V_max, vector_mag(&v));
+          x.y = bbox.y1 + (j + 0.5) * adv->dy;
+          for (int k = patch->k1; k <= patch->k2; ++k)
+          {
+            x.z = bbox.z1 + k * adv->dz;
+            st_func_eval(adv->V, &x, t, (real_t*)&v);
+            adv->V_max = MAX(adv->V_max, vector_mag(&v));
+          }
         }
       }
     }
   }
+  snprintf(reason, POLYMEC_MODEL_MAXDT_REASON_SIZE, 
+           "CFL constraint (V_max = %g, dx = %g)", adv->V_max, dx);
 
-  if (V_max > 0.0)
-    return dx / V_max;
+  if (adv->V_max > 0.0)
+    return dx / adv->V_max;
   else 
     return FLT_MAX;
 }
@@ -529,6 +522,9 @@ static void advect_setup(advect_t* adv)
                                                            ark_max_dt_wrapper,
                                                            NULL);
   adv->integ = str_ode_integrator_new(ark2);
+
+  // Reset the max velocity.
+  adv->V_max = -FLT_MAX;
 }
 
 static void advect_init(void* context, real_t t)

@@ -5,20 +5,11 @@
 -- ball_and_jack(x0, ball_radius, ball_value, jack_size, jack_value)
 initial_state = ball_and_jack({0, 0, 0}, 0.1, 1.0, 0.07, 2.0)
 
--- Rotational velocity in terms of Euler angles describing a rigid body in 
--- a rotated frame with axes X, Y, Z in terms of its unrotated axes x, y, z.
--- The line of nodes (the N axis) is the intersection of the xy and XY planes.
--- Here, we define the three Euler angles as:
---   alpha, the angle between the x axis and the N axis
---   beta, the angle between the z axis and the Z axis
---   gamma, the angle between the N axis and the X axis
--- The velocity is defined in terms of the time derivatives of 
--- these three angles, rotating about an origin.
+-- Rotational velocity defined by an angular velocity pseudovector omega, and 
+-- an origin x0 through which omega points. 
 x0 = {0, 0, 0}
-velocity = rigid_body_rotation{origin = x0,
-                               alpha_dot = 1.0, 
-                               beta_dot = 0, 
-                               gamma_dot = 0}
+omega = {0, 0, 1}
+velocity = rigid_body_rotation{origin = x0, angular_velocity = omega}
 
 -- Structured grid.
 grid = structured_grid{num_cells = {128, 128, 128},
