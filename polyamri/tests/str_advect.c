@@ -575,8 +575,18 @@ static void advect_plot(void* context, const char* prefix, const char* directory
 
   silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, prefix, directory, 1, 0, step, t);
   silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
-  const char* comp_names[] = {"U"};
-  silo_file_write_str_grid_cell_data(silo, comp_names, "grid", adv->U, NULL, adv->mapping);
+  const char* U_name[] = {"U"};
+  silo_file_write_str_grid_cell_data(silo, U_name, "grid", adv->U, NULL, adv->mapping);
+
+  // Compute and plot the time derivative of the solution.
+  const char* dUdt_name[] = {"dUdt"};
+  int num_int_cells = str_grid_cell_data_num_cells(adv->U, false);
+  real_t* U_buffer = str_grid_cell_data_buffer(adv->U);
+  real_t dUdt_buffer[num_int_cells];
+  advect_rhs(context, t, U_buffer, dUdt_buffer);
+  silo_file_write_str_grid_cell_data(silo, dUdt_name, "grid", adv->dUdt_work, NULL, adv->mapping);
+
+  // Wrap it up.
   silo_file_close(silo);
 }
 
