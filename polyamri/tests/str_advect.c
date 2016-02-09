@@ -572,19 +572,51 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
 static void advect_plot(void* context, const char* prefix, const char* directory, real_t t, int step)
 {
   advect_t* adv = context;
+  int num_int_cells = str_grid_cell_data_num_cells(adv->U, false);
 
   silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, prefix, directory, 1, 0, step, t);
   silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
   const char* U_name[] = {"U"};
   silo_file_write_str_grid_cell_data(silo, U_name, "grid", adv->U, NULL, adv->mapping);
 
+  // Compute and plot the velocity field.
+  {
+    const char* V_names[] = {"vx", "vy", "vz"};
+    str_grid_cell_data_t* velocity = str_grid_cell_data_new(adv->grid, 3, 0);
+    int pos = 0, ip, jp, kp;
+    str_grid_patch_t* patch;
+    bbox_t bbox;
+    while (str_grid_cell_data_next_patch(velocity, &pos, &ip, &jp, &kp, &patch, &bbox))
+    {
+      DECLARE_STR_GRID_PATCH_ARRAY(V, patch);
+      point_t x;
+      for (int i = patch->i1; i < patch->i2; ++i)
+      {
+        x.x = bbox.x1 + (i + 0.5) * adv->dx;
+        for (int j = patch->j1; j < patch->j2; ++j)
+        {
+          x.y = bbox.y1 + (j + 0.5) * adv->dy;
+          for (int k = patch->k1; k < patch->k2; ++k)
+          {
+            x.z = bbox.z1 + (k + 0.5) * adv->dz;
+            st_func_eval(adv->V, &x, t, &V[i][j][k][0]);
+          }
+        }
+      }
+    }
+    silo_file_write_str_grid_cell_data(silo, V_names, "grid", velocity, NULL, adv->mapping);
+    silo_file_write_vector_expression(silo, "velocity", "{<vx>, <vy>, <vz>}");
+    str_grid_cell_data_free(velocity);
+  }
+
   // Compute and plot the time derivative of the solution.
-  const char* dUdt_name[] = {"dUdt"};
-  int num_int_cells = str_grid_cell_data_num_cells(adv->U, false);
-  real_t* U_buffer = str_grid_cell_data_buffer(adv->U);
-  real_t dUdt_buffer[num_int_cells];
-  advect_rhs(context, t, U_buffer, dUdt_buffer);
-  silo_file_write_str_grid_cell_data(silo, dUdt_name, "grid", adv->dUdt_work, NULL, adv->mapping);
+  {
+    const char* dUdt_name[] = {"dUdt"};
+    real_t* U_buffer = str_grid_cell_data_buffer(adv->U);
+    real_t dUdt_buffer[num_int_cells];
+    advect_rhs(context, t, U_buffer, dUdt_buffer);
+    silo_file_write_str_grid_cell_data(silo, dUdt_name, "grid", adv->dUdt_work, NULL, adv->mapping);
+  }
 
   // Wrap it up.
   silo_file_close(silo);
