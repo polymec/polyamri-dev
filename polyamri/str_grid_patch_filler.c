@@ -97,7 +97,7 @@ static int copy_x2_to_x1(void* context,
     for (int k = dest_patch->k1; k < dest_patch->k2; ++k)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[dest_patch->i1+g][j][k][c] = src_data[dest_patch->i2+g][j][k][c];
+          dest_data[dest_patch->i1-ng+g][j][k][c] = src_data[dest_patch->i2-ng+g][j][k][c];
 
   return -1;
 }
@@ -137,7 +137,7 @@ static int copy_y2_to_y1(void* context,
     for (int k = dest_patch->k1; k < dest_patch->k2; ++k)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[i][dest_patch->j1+g][k][c] = src_data[i][dest_patch->j2+g][k][c];
+          dest_data[i][dest_patch->j1-ng+g][k][c] = src_data[i][dest_patch->j2-ng+g][k][c];
 
   return -1;
 }
@@ -177,7 +177,7 @@ static int copy_z2_to_z1(void* context,
     for (int j = dest_patch->j1; j < dest_patch->j2; ++j)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[i][j][dest_patch->k1+g][c] = src_data[i][j][dest_patch->k2+g][c];
+          dest_data[i][j][dest_patch->k1-ng+g][c] = src_data[i][j][dest_patch->k2-ng+g][c];
 
   return -1;
 }
