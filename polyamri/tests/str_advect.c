@@ -13,6 +13,7 @@
 #include "polyamri/str_ode_integrator.h"
 #include "polyamri/interpreter_register_polyamri_functions.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
+#include "polyamri/silo_file_str_methods.h"
 #include "model/model.h"
 #include "integrators/ark_ode_integrator.h"
 
@@ -106,7 +107,7 @@ typedef struct
 
   // Grid and computational domain.
   str_grid_t* grid;
-  coord_mapping_t* domain;
+  coord_mapping_t* mapping;
   real_t dx, dy, dz;
 
   // State information.
@@ -145,12 +146,12 @@ static void advect_read_input(void* context,
   // mapping.
   bbox_t* bbox = interpreter_get_bbox(interp, "domain");
   if (bbox != NULL)
-    adv->domain = grid_to_bbox_coord_mapping_new(bbox);
+    adv->mapping = grid_to_bbox_coord_mapping_new(bbox);
   else
   {
     coord_mapping_t* mapping = interpreter_get_coord_mapping(interp, "domain");
     if (mapping != NULL)
-      adv->domain = mapping;
+      adv->mapping = mapping;
     else
       polymec_error("domain must be a bounding box or a coordinate mapping.");
   }
@@ -568,43 +569,32 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
   return t2 - t;
 }
 
-static void advect_load(void* context, const char* file_prefix, const char* directory, real_t* t, int step)
+static void advect_plot(void* context, const char* prefix, const char* directory, real_t t, int step)
 {
-#if 0
   advect_t* adv = context;
 
-  silo_file_t* silo = silo_file_open(MPI_COMM_WORLD, prefix, directory, 0, step, t);
-  if (advect->grid != NULL)
-    mesh_free(mod->mesh);
-  mod->mesh = silo_file_read_mesh(silo, "mesh");
-  real_t* X = silo_file_read_scalar_cell_field(silo, "X", "mesh", NULL);
+  silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, prefix, directory, 1, 0, step, t);
+  silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
+  const char* comp_names[] = {"U"};
+  silo_file_write_str_grid_cell_data(silo, comp_names, "grid", adv->U, NULL, adv->mapping);
   silo_file_close(silo);
-
-  // Set everything up and copy the saved solution.
-  advect_setup(adv);
-  memcpy(mod->X, X, sizeof(real_t) * mod->mesh->num_cells);
-  polymec_free(X);
-#endif
 }
 
-static void advect_save(void* context, const char* file_prefix, const char* directory, real_t t, int step)
+static void advect_load(void* context, const char* prefix, const char* directory, real_t* t, int step)
 {
-#if 0
+  advect_t* adv = context;
+  POLYMEC_NOT_IMPLEMENTED;
+}
+
+static void advect_save(void* context, const char* prefix, const char* directory, real_t t, int step)
+{
   advect_t* adv = context;
 
-  int rank;
-  MPI_Comm_rank(adv->grid->comm, &rank);
-
-  silo_file_t* silo = silo_file_new(adv->comm, file_prefix, directory, 1, 0, step, t);
-  silo_file_write_mesh(silo, "grid", adv->grid);
-  silo_file_write_scalar_cell_field(silo, "life", "grid", adv->state, NULL);
-  real_t* rank_field = polymec_malloc(sizeof(real_t) * adv->grid->num_cells);
-  for (int i = 0; i < adv->grid->num_cells; ++i)
-    rank_field[i] = 1.0 * rank;
-  silo_file_write_scalar_cell_field(silo, "rank", "grid", rank_field, NULL);
-  polymec_free(rank_field);
+  silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, prefix, directory, 1, 0, step, t);
+  silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
+  const char* comp_names[] = {"U"};
+  silo_file_write_str_grid_cell_data(silo, comp_names, "grid", adv->U, NULL, adv->mapping);
   silo_file_close(silo);
-#endif
 }
 
 static void advect_finalize(void* context, int step, real_t t)
@@ -625,7 +615,7 @@ static model_t* advect_ctor()
 {
   advect_t* adv = polymec_malloc(sizeof(advect_t));
   adv->grid = NULL;
-  adv->domain = NULL;
+  adv->mapping = NULL;
   adv->U0 = NULL;
   adv->V = NULL;
   adv->U = NULL;
@@ -637,6 +627,7 @@ static model_t* advect_ctor()
                          .init = advect_init,
                          .max_dt = advect_max_dt,
                          .advance = advect_advance,
+                         .plot = advect_plot,
                          .load = advect_load,
                          .save = advect_save,
                          .finalize = advect_finalize,

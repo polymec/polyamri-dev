@@ -102,9 +102,9 @@ str_grid_face_data_t* str_grid_face_data_with_buffer(str_grid_t* grid,
   // Now populate the patches for x-, y-, and z-faces.
   int px, py, pz;
   str_grid_get_patch_size(grid, &px, &py, &pz);
-  face_data->patch_lx = 1.0 / px;
-  face_data->patch_ly = 1.0 / py;
-  face_data->patch_lz = 1.0 / pz;
+  face_data->patch_lx = 1.0 / face_data->nx;
+  face_data->patch_ly = 1.0 / face_data->ny;
+  face_data->patch_lz = 1.0 / face_data->nz;
   int pos = 0, i, j, k;
   while (str_grid_next_patch(grid, &pos, &i, &j, &k))
   {

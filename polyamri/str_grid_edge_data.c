@@ -102,9 +102,9 @@ str_grid_edge_data_t* str_grid_edge_data_with_buffer(str_grid_t* grid,
   // Now populate the patches for x-, y-, and z-edges.
   int px, py, pz;
   str_grid_get_patch_size(grid, &px, &py, &pz);
-  edge_data->patch_lx = 1.0 / px;
-  edge_data->patch_ly = 1.0 / py;
-  edge_data->patch_lz = 1.0 / pz;
+  edge_data->patch_lx = 1.0 / edge_data->nx;
+  edge_data->patch_ly = 1.0 / edge_data->ny;
+  edge_data->patch_lz = 1.0 / edge_data->nz;
   int pos = 0, i, j, k;
   while (str_grid_next_patch(grid, &pos, &i, &j, &k))
   {

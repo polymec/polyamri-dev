@@ -67,6 +67,7 @@ str_grid_node_data_t* str_grid_node_data_with_buffer(str_grid_t* grid,
   str_grid_node_data_t* node_data = polymec_malloc(node_data_size);
   node_data->grid = grid;
   node_data->nc = num_components;
+
   str_grid_get_extents(grid, &node_data->nx, &node_data->ny, &node_data->nz);
   node_data->patches = int_ptr_unordered_map_new();
   node_data->patch_offsets = polymec_malloc(sizeof(int) * (num_patches+1));
@@ -75,9 +76,9 @@ str_grid_node_data_t* str_grid_node_data_with_buffer(str_grid_t* grid,
   // Now populate the patches (with NULL buffers).
   int px, py, pz;
   str_grid_get_patch_size(grid, &px, &py, &pz);
-  node_data->patch_lx = 1.0 / px;
-  node_data->patch_ly = 1.0 / py;
-  node_data->patch_lz = 1.0 / pz;
+  node_data->patch_lx = 1.0 / node_data->nx;
+  node_data->patch_ly = 1.0 / node_data->ny;
+  node_data->patch_lz = 1.0 / node_data->nz;
   int pos = 0, i, j, k, l = 0;
   while (str_grid_next_patch(grid, &pos, &i, &j, &k))
   {

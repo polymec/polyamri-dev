@@ -96,12 +96,12 @@ str_grid_cell_data_t* str_grid_cell_data_with_buffer(str_grid_t* grid,
     ++l;
   }
 
-  cell_data->patch_lx = 1.0 / px;
-  cell_data->dx = cell_data->patch_lx / cell_data->nx;
-  cell_data->patch_ly = 1.0 / py;
-  cell_data->dy = cell_data->patch_ly / cell_data->ny;
-  cell_data->patch_lz = 1.0 / pz;
-  cell_data->dz = cell_data->patch_lz / cell_data->nz;
+  cell_data->patch_lx = 1.0 / cell_data->nx;
+  cell_data->dx = cell_data->patch_lx / px;
+  cell_data->patch_ly = 1.0 / cell_data->ny;
+  cell_data->dy = cell_data->patch_ly / py;
+  cell_data->patch_lz = 1.0 / cell_data->nz;
+  cell_data->dz = cell_data->patch_lz / pz;
   count_cells(cell_data);
 
   cell_data->token = -1; // No data in flight.
