@@ -522,7 +522,7 @@ static void advect_setup(advect_t* adv)
                                                            advect_rhs,
                                                            ark_max_dt_wrapper,
                                                            NULL);
-  adv->integ = str_ode_integrator_new(ark2);
+  adv->integ = str_ode_integrator_new(ark2, adv->grid, num_comps, num_ghost_layers);
 
   // Reset the max velocity.
   adv->V_max = -FLT_MAX;

@@ -18,7 +18,10 @@ typedef struct str_ode_integrator_t str_ode_integrator_t;
 // Creates a str_ode_integrator that uses the given ode_integrator instance
 // to integrate its cell-centered data. The underlying integrator is consumed
 // by this new structured integrator.
-str_ode_integrator_t* str_ode_integrator_new(ode_integrator_t* integrator);
+str_ode_integrator_t* str_ode_integrator_new(ode_integrator_t* integrator,
+                                             str_grid_t* grid,
+                                             int num_comps,
+                                             int num_ghost_layers);
 
 // Frees the structured ODE integrator.
 void str_ode_integrator_free(str_ode_integrator_t* integ);
