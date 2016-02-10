@@ -15,57 +15,22 @@ struct str_ode_integrator_t
   int npx, npy, npz;
 
   ode_integrator_t* integ; // underlying ODE integrator
-  ode_integrator_t* wrapped_integ; // wrapped ODE integrator w/ copy_in/copy_out
 
   int X_size;
 };
 
-// This creates a wrapper integrator around the given integrator, decorating 
-// it with copy_in/copy_out methods. The wrapper integrator assumes control 
-// of the integrator. 
-static void wrap_reset(void* context, real_t t, real_t* x)
+static void str_copy_in(void* context, real_t* solution_data, real_t* x)
 {
   str_ode_integrator_t* integ = context;
-  ode_integrator_reset(integ->integ, t, x);
+printf("fake copy in\n");
+  memcpy(x, solution_data, sizeof(real_t) * integ->X_size);
 }
 
-static bool wrap_step(void* context, real_t max_dt, real_t* t, real_t* x)
+static void str_copy_out(void* context, real_t* x, real_t* solution_data)
 {
   str_ode_integrator_t* integ = context;
-  return ode_integrator_step(integ->integ, max_dt, t, x);
-}
-
-static bool wrap_advance(void* context, real_t t1, real_t t2, real_t* x)
-{
-  str_ode_integrator_t* integ = context;
-  return ode_integrator_advance(integ->integ, t1, t2, x);
-}
-
-static void wrap_copy_in(void* context, real_t* solution_data, real_t* x)
-{
-  str_ode_integrator_t* integ = context;
-  
-}
-
-static void wrap_copy_out(void* context, real_t* x, real_t* solution_data)
-{
-  str_ode_integrator_t* integ = context;
-}
-
-static ode_integrator_t* wrapped_integrator(str_ode_integrator_t* integ)
-{
-  ASSERT(integ->integ != NULL);
-  ode_integrator_vtable vtable = {.reset = wrap_reset,
-                                  .step = wrap_step,
-                                  .advance = wrap_advance,
-                                  .copy_in = wrap_copy_in,
-                                  .copy_out = wrap_copy_out,
-                                  .dtor = NULL};
-  return ode_integrator_new(ode_integrator_name(integ->integ),
-                            integ,
-                            vtable, 
-                            ode_integrator_order(integ->integ),
-                            ode_integrator_solution_vector_size(integ->integ));
+printf("fake copy out\n");
+  memcpy(solution_data, x, sizeof(real_t) * integ->X_size);
 }
 
 str_ode_integrator_t* str_ode_integrator_new(ode_integrator_t* integrator,
@@ -80,8 +45,6 @@ str_ode_integrator_t* str_ode_integrator_new(ode_integrator_t* integrator,
   char name[1025];
   snprintf(name, 1024, "Structured ODE integrator[%s]", ode_integrator_name(integrator));
   integ->name = string_dup(name);
-  integ->integ = integrator;
-  integ->wrapped_integ = wrapped_integrator(integ);
   integ->grid = grid;
   integ->nc = num_comps;
   integ->ng = num_ghost_layers;
@@ -93,12 +56,17 @@ str_ode_integrator_t* str_ode_integrator_new(ode_integrator_t* integrator,
   integ->X_size = integ->nc * num_patch_cells * num_patches;
   ASSERT(integ->X_size == ode_integrator_solution_vector_size(integrator));
 
+  // Set up a "decorated integrator" that adds special copy_in / copy_out 
+  // methods to the base one.
+  ode_integrator_vtable vtable = {.copy_in = str_copy_in,
+                                  .copy_out = str_copy_out};
+  integ->integ = decorated_ode_integrator_new(integrator, integ, vtable);
+
   return integ;
 }
 
 void str_ode_integrator_free(str_ode_integrator_t* integ)
 {
-  ode_integrator_free(integ->wrapped_integ);
   ode_integrator_free(integ->integ);
   string_free(integ->name);
   polymec_free(integ);
