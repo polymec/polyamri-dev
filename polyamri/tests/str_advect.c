@@ -278,7 +278,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
-    for (int i = face_patch->i1; i < face_patch->i2; ++i)
+    for (int i = face_patch->i1; i < face_patch->i2-1; ++i) // note -1 here: we use i+1 in the "high flux"
     {
       x_low.x = bbox.x1 + i*dx;
       x_high.x = x_low.x + dx;
@@ -322,7 +322,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     for (int i = face_patch->i1; i < face_patch->i2; ++i)
     {
       x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
-      for (int j = face_patch->j1; j < face_patch->j2; ++j)
+      for (int j = face_patch->j1; j < face_patch->j2-1; ++j) // note -1 here: we use j-1 in the "high" flux
       {
         x_low.y = bbox.y1 + j * dy;
         x_high.y = x_low.y + dy;
@@ -366,7 +366,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
         x_low.y = x_high.y = bbox.y1 + (j+0.5)*dy;
-        for (int k = face_patch->k1; k < face_patch->k2; ++k)
+        for (int k = face_patch->k1; k < face_patch->k2-1; ++k) // note -1 here: we use k+1 in the "high" flux
         {
           x_low.z = bbox.z1 + k*dz;
           x_high.z = x_low.z + dz;

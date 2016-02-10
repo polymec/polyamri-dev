@@ -22,14 +22,12 @@ struct str_ode_integrator_t
 static void str_copy_in(void* context, real_t* solution_data, real_t* x)
 {
   str_ode_integrator_t* integ = context;
-printf("fake copy in\n");
   memcpy(x, solution_data, sizeof(real_t) * integ->X_size);
 }
 
 static void str_copy_out(void* context, real_t* x, real_t* solution_data)
 {
   str_ode_integrator_t* integ = context;
-printf("fake copy out\n");
   memcpy(solution_data, x, sizeof(real_t) * integ->X_size);
 }
 
