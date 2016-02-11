@@ -10,12 +10,11 @@
 #include "polyamri/str_grid_patch_filler.h"
 #include "polyamri/str_grid_cell_data.h"
 #include "polyamri/str_grid_face_data.h"
-#include "polyamri/str_ode_integrator.h"
+#include "polyamri/ark_str_ode_integrator.h"
 #include "polyamri/interpreter_register_polyamri_functions.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
 #include "polyamri/silo_file_str_methods.h"
 #include "model/model.h"
-#include "integrators/ark_ode_integrator.h"
 
 //------------------------------------------------------------------------
 //                  Lua functions specific to this model
@@ -120,11 +119,10 @@ typedef struct
   st_func_t* V;
   real_t V_max;
 
-  // Time integrator and work vectors.
+  // Time integrator and workspace.
   str_ode_integrator_t* integ;
-  str_grid_cell_data_t* U_work;
-  str_grid_cell_data_t* dUdt_work;
   str_grid_face_data_t* F_work;
+  char max_dt_reason[POLYMEC_MODEL_MAXDT_REASON_SIZE];
 } advect_t;
 
 static const char advect_desc[] = "PolyAMRI advection (str_advect)\n"
@@ -157,7 +155,7 @@ static void advect_read_input(void* context,
   }
 }
 
-static real_t advect_max_dt(void* context, real_t t, char* reason)
+static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
 {
   advect_t* adv = context;
   real_t dx = MIN(adv->dx, MIN(adv->dy, adv->dz));
@@ -170,7 +168,7 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
     int pos = 0, ip, jp, kp;
     str_grid_patch_t* patch;
     bbox_t bbox;
-    while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch, &bbox))
+    while (str_grid_cell_data_next_patch(U, &pos, &ip, &jp, &kp, &patch, &bbox))
     {
       point_t x;
       vector_t v;
@@ -224,7 +222,7 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
       }
     }
   }
-  snprintf(reason, POLYMEC_MODEL_MAXDT_REASON_SIZE, 
+  snprintf(adv->max_dt_reason, POLYMEC_MODEL_MAXDT_REASON_SIZE-1, 
            "CFL constraint (V_max = %g, dx = %g)", adv->V_max, dx);
 
   if (adv->V_max > 0.0)
@@ -233,10 +231,12 @@ static real_t advect_max_dt(void* context, real_t t, char* reason)
     return FLT_MAX;
 }
 
-static real_t ark_max_dt_wrapper(void* context, real_t t, real_t* x)
+static real_t advect_max_dt(void* context, real_t t, char* reason)
 {
-  char reason[POLYMEC_MODEL_MAXDT_REASON_SIZE];
-  return advect_max_dt(context, t, reason);
+  advect_t* adv = context;
+  real_t dt = ark_max_dt(context, t, adv->U);
+  strcpy(reason, adv->max_dt_reason);
+  return dt;
 }
 
 static void advect_clear(advect_t* adv)
@@ -247,22 +247,18 @@ static void advect_clear(advect_t* adv)
     str_grid_cell_data_free(adv->U);
   if (adv->F_work != NULL)
     str_grid_face_data_free(adv->F_work);
-  if (adv->U_work != NULL)
-    str_grid_cell_data_free(adv->U_work);
-  if (adv->dUdt_work != NULL)
-    str_grid_cell_data_free(adv->dUdt_work);
 }
 
 // Here's the right-hand side for the ARK integrator.
-static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
+static int advect_rhs(void* context, 
+                      real_t t, 
+                      str_grid_cell_data_t* X, 
+                      str_grid_cell_data_t* dXdt)
 {
   advect_t* adv = context;
 
-  // Point our "work vector" at the given buffer.
-  str_grid_cell_data_set_buffer(adv->U_work, X, false);
-
   // Make sure ghost cells are filled.
-  str_grid_fill_ghost_cells(adv->grid, adv->U_work);
+  str_grid_cell_data_fill_ghosts(X);
 
   // Now go over each cell and compute fluxes.
   int pos, ip, jp, kp;
@@ -274,7 +270,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
   while (str_grid_face_data_next_x_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(X, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -315,7 +311,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   pos = 0;
   while (str_grid_face_data_next_y_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(X, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -356,7 +352,7 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
   pos = 0;
   while (str_grid_face_data_next_z_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
-    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(adv->U_work, ip, jp, kp);
+    str_grid_patch_t* cell_patch = str_grid_cell_data_patch(X, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(F, face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(U, cell_patch);
     point_t x_low, x_high;
@@ -393,14 +389,11 @@ static int advect_rhs(void* context, real_t t, real_t* X, real_t* dXdt)
     }
   }
 
-  // Now compute dU/dt.
-  str_grid_cell_data_set_buffer(adv->dUdt_work, dXdt, false);
-
   real_t V = dx * dy * dz;
   real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
   pos = 0;
   str_grid_patch_t* rhs_patch;
-  while (str_grid_cell_data_next_patch(adv->dUdt_work, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
+  while (str_grid_cell_data_next_patch(dXdt, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
   {
     str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
     str_grid_patch_t* y_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
@@ -504,25 +497,18 @@ static void advect_setup(advect_t* adv)
   adv->U = str_grid_cell_data_new(adv->grid, num_comps, num_ghost_layers);
 
   // Create work "vectors."
-  adv->U_work = str_grid_cell_data_with_buffer(adv->grid, 1, 1, NULL);
-  adv->dUdt_work = str_grid_cell_data_with_buffer(adv->grid, 1, 0, NULL);
   adv->F_work = str_grid_face_data_new(adv->grid, 1);
 
   // Create the ARK integrator.
-  int num_local_cells = str_grid_cell_data_num_cells(adv->U, false);
-  int total_num_cells = str_grid_cell_data_num_cells(adv->U, true);
-  int num_ghost_cells = total_num_cells - num_local_cells;
-  int N_local = num_comps * num_local_cells;
-  int N_remote = num_comps * num_ghost_cells;
-  ode_integrator_t* ark2 = explicit_ark_ode_integrator_new(2, 
-                                                           MPI_COMM_WORLD,
-                                                           N_local,
-                                                           N_remote,
-                                                           adv,
-                                                           advect_rhs,
-                                                           ark_max_dt_wrapper,
-                                                           NULL);
-  adv->integ = str_ode_integrator_new(ark2, adv->grid, num_comps, num_ghost_layers);
+  adv->integ = explicit_ark_str_ode_integrator_new(2, 
+                                                   MPI_COMM_WORLD,
+                                                   adv->grid,
+                                                   num_comps,
+                                                   num_ghost_layers,
+                                                   adv,
+                                                   advect_rhs,
+                                                   ark_max_dt,
+                                                   NULL);
 
   // Reset the max velocity.
   adv->V_max = -FLT_MAX;
@@ -572,7 +558,6 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
 static void advect_plot(void* context, const char* prefix, const char* directory, real_t t, int step)
 {
   advect_t* adv = context;
-  int num_int_cells = str_grid_cell_data_num_cells(adv->U, false);
 
   silo_file_t* silo = silo_file_new(MPI_COMM_WORLD, prefix, directory, 1, 0, step, t);
   silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
@@ -612,10 +597,10 @@ static void advect_plot(void* context, const char* prefix, const char* directory
   // Compute and plot the time derivative of the solution.
   {
     const char* dUdt_name[] = {"dUdt"};
-    real_t* U_buffer = str_grid_cell_data_buffer(adv->U);
-    real_t dUdt_buffer[num_int_cells];
-    advect_rhs(context, t, U_buffer, dUdt_buffer);
-    silo_file_write_str_grid_cell_data(silo, dUdt_name, "grid", adv->dUdt_work, NULL, adv->mapping);
+    str_grid_cell_data_t* dUdt = str_grid_cell_data_new(adv->grid, 1, 1);
+    advect_rhs(context, t, adv->U, dUdt);
+    silo_file_write_str_grid_cell_data(silo, dUdt_name, "grid", dUdt, NULL, adv->mapping);
+    str_grid_cell_data_free(dUdt);
   }
 
   // Wrap it up.
@@ -662,8 +647,6 @@ static model_t* advect_ctor()
   adv->V = NULL;
   adv->U = NULL;
   adv->F_work = NULL;
-  adv->U_work = NULL;
-  adv->dUdt_work = NULL;
   adv->integ = NULL;
   model_vtable vtable = {.read_input = advect_read_input,
                          .init = advect_init,
