@@ -11,9 +11,15 @@ typedef struct
 {
   ode_integrator_t* ark; // Underlying ARK integrator.
 
-  int nc, ng;
+  // Methods.
+  void* context;
+  int (*fe_func)(void* context, real_t t, str_grid_cell_data_t* x, str_grid_cell_data_t* fe);
+  int (*fi_func)(void* context, real_t t, str_grid_cell_data_t* x, str_grid_cell_data_t* fi);
+  real_t (*stable_dt_func)(void* context, real_t t, str_grid_cell_data_t* x);
+  void (*dtor)(void* context);
 
   // Bookkeeping.
+  int nc, ng;
   str_grid_cell_data_t* x;
   str_grid_cell_data_t* fi;
   str_grid_cell_data_t* fe;
@@ -27,8 +33,7 @@ static int ark_fe_func(void* context,
   str_ark_t* ark = context;
   str_grid_cell_data_set_buffer(ark->x, x, false);
   str_grid_cell_data_set_buffer(ark->fe, fe, false);
-  ark_ode_integrator_eval_fe(ark->ark, t, x, fe);
-  return 0;
+  return ark->fe_func(ark->context, t, ark->x, ark->fe);
 }
 
 static int ark_fi_func(void* context, 
@@ -39,8 +44,7 @@ static int ark_fi_func(void* context,
   str_ark_t* ark = context;
   str_grid_cell_data_set_buffer(ark->x, x, false);
   str_grid_cell_data_set_buffer(ark->fi, fi, false);
-  ark_ode_integrator_eval_fi(ark->ark, t, x, fi);
-  return 0;
+  return ark->fi_func(ark->context, t, ark->x, ark->fi);
 }
 
 static real_t ark_stable_dt_func(void* context, 
@@ -49,7 +53,7 @@ static real_t ark_stable_dt_func(void* context,
 {
   str_ark_t* ark = context;
   str_grid_cell_data_set_buffer(ark->x, x, false);
-  return ark_ode_integrator_stable_dt(ark->ark, t, x);
+  return ark->stable_dt_func(ark->context, t, ark->x);
 }
 
 static bool ark_step(void* context, real_t max_dt, real_t* t, str_grid_cell_data_t* x)
@@ -80,6 +84,8 @@ static void ark_dtor(void* context)
   str_grid_cell_data_free(ark->fe);
   str_grid_cell_data_free(ark->x);
   ode_integrator_free(ark->ark);
+  if ((ark->context != NULL) && (ark->dtor != NULL))
+    ark->dtor(ark->context);
   polymec_free(ark);
 }
 
@@ -110,6 +116,11 @@ str_ode_integrator_t* functional_ark_str_ode_integrator_new(int order,
                                                             int max_anderson_accel_dim)
 {
   str_ark_t* ark = polymec_malloc(sizeof(str_ark_t));
+  ark->context = context;
+  ark->fe_func = fe_func;
+  ark->fi_func = fi_func;
+  ark->stable_dt_func = stable_dt_func;
+  ark->dtor = dtor;
   ark->x = str_grid_cell_data_with_buffer(grid, num_components, num_ghost_layers, NULL);
   ark->fe = str_grid_cell_data_with_buffer(grid, num_components, num_ghost_layers, NULL);
   ark->fi = str_grid_cell_data_with_buffer(grid, num_components, num_ghost_layers, NULL);
@@ -158,6 +169,11 @@ str_ode_integrator_t* jfnk_ark_str_ode_integrator_new(int order,
                                                       int max_krylov_dim)
 {
   str_ark_t* ark = polymec_malloc(sizeof(str_ark_t));
+  ark->context = context;
+  ark->fe_func = fe_func;
+  ark->fi_func = fi_func;
+  ark->stable_dt_func = stable_dt_func;
+  ark->dtor = dtor;
   ark->x = str_grid_cell_data_with_buffer(grid, num_components, num_ghost_layers, NULL);
   ark->fe = str_grid_cell_data_with_buffer(grid, num_components, num_ghost_layers, NULL);
   ark->fi = str_grid_cell_data_with_buffer(grid, num_components, num_ghost_layers, NULL);
