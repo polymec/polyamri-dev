@@ -45,7 +45,9 @@ static void write_str_patch_grid(silo_file_t* file,
   ASSERT(n2 > 0);
   ASSERT(n3 > 0);
   int N = (n1+1) * (n2+1) * (n3+1);
-  real_t x1_node[N], x2_node[N], x3_node[N];
+  real_t* x1_node = polymec_malloc(sizeof(real_t) * N);
+  real_t* x2_node = polymec_malloc(sizeof(real_t) * N);
+  real_t* x3_node = polymec_malloc(sizeof(real_t) * N);
   int dimensions[3] = {n1+1, n2+1, n3+1};
   int coord_type;
   if (mapping != NULL)
@@ -103,6 +105,9 @@ static void write_str_patch_grid(silo_file_t* file,
                 SILO_FLOAT_TYPE, coord_type, optlist);
   if (optlist != NULL)
     DBFreeOptlist(optlist);
+  polymec_free(x1_node);
+  polymec_free(x2_node);
+  polymec_free(x3_node);
 }
 
 static void write_str_patch_data(silo_file_t* file,
