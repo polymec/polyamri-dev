@@ -557,8 +557,10 @@ static real_t advect_advance(void* context, real_t max_dt, real_t t)
 
   // Integrate!
   real_t t2 = t;
+  polymec_suspend_fpe();
   if (!str_ode_integrator_step(adv->integ, max_dt, &t2, adv->U))
     polymec_error("advect_advance: Integration failed at t = %g.", t);
+  polymec_restore_fpe();
 
   return t2 - t;
 }
