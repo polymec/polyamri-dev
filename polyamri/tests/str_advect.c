@@ -256,6 +256,8 @@ static int advect_rhs(void* context,
                       str_grid_cell_data_t* dXdt)
 {
   advect_t* adv = context;
+  real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
+  real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
 
   // Make sure ghost cells are filled.
   str_grid_cell_data_fill_ghosts(X);
@@ -267,7 +269,6 @@ static int advect_rhs(void* context,
   
   // x fluxes.
   pos = 0;
-  real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
   while (str_grid_face_data_next_x_patch(adv->F_work, &pos, &ip, &jp, &kp, &face_patch, &bbox))
   {
     str_grid_patch_t* cell_patch = str_grid_cell_data_patch(X, ip, jp, kp);
@@ -276,7 +277,7 @@ static int advect_rhs(void* context,
     point_t x_low, x_high;
     for (int i = face_patch->i1; i < face_patch->i2-1; ++i) // note -1 here: we use i+1 in the "high flux"
     {
-      x_low.x = bbox.x1 + i*dx;
+      x_low.x = bbox.x1 + i * dx;
       x_high.x = x_low.x + dx;
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
@@ -300,8 +301,8 @@ static int advect_rhs(void* context,
           real_t U_high = (v_high.x >= 0.0) ? U[ic][jc][kc][0] : U[ic+1][jc][kc][0];
 
           // Compute the low and high fluxes.
-          F[i][j][k][0]   = U_low * v_low.x;
-          F[i+1][j][k][0] = U_high * v_high.x;
+          F[i][j][k][0]   = Ax * U_low * v_low.x;
+          F[i+1][j][k][0] = Ax * U_high * v_high.x;
         }
       }
     }
@@ -318,7 +319,7 @@ static int advect_rhs(void* context,
     for (int i = face_patch->i1; i < face_patch->i2; ++i)
     {
       x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
-      for (int j = face_patch->j1; j < face_patch->j2-1; ++j) // note -1 here: we use j-1 in the "high" flux
+      for (int j = face_patch->j1; j < face_patch->j2-1; ++j) // note -1 here: we use j+1 in the "high" flux
       {
         x_low.y = bbox.y1 + j * dy;
         x_high.y = x_low.y + dy;
@@ -341,8 +342,8 @@ static int advect_rhs(void* context,
           real_t U_high = (v_high.y >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc+1][kc][0];
 
           // Compute the low and high fluxes.
-          F[i][j][k][0]   = U_low * v_low.y;
-          F[i][j+1][k][0] = U_high * v_high.y;
+          F[i][j][k][0]   = Ay * U_low * v_low.y;
+          F[i][j+1][k][0] = Ay * U_high * v_high.y;
         }
       }
     }
@@ -358,13 +359,13 @@ static int advect_rhs(void* context,
     point_t x_low, x_high;
     for (int i = face_patch->i1; i < face_patch->i2; ++i)
     {
-      x_low.x = x_high.x = bbox.x1 + (i+0.5)*dx;
+      x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
       for (int j = face_patch->j1; j < face_patch->j2; ++j)
       {
-        x_low.y = x_high.y = bbox.y1 + (j+0.5)*dy;
+        x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
         for (int k = face_patch->k1; k < face_patch->k2-1; ++k) // note -1 here: we use k+1 in the "high" flux
         {
-          x_low.z = bbox.z1 + k*dz;
+          x_low.z = bbox.z1 + k * dz;
           x_high.z = x_low.z + dz;
 
           // Get the velocity at the low and high faces.
@@ -382,22 +383,21 @@ static int advect_rhs(void* context,
           real_t U_high = (v_high.z >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc][kc+1][0];
 
           // Compute the low and high fluxes.
-          F[i][j][k][0]   = U_low * v_low.z;
-          F[i][j][k+1][0] = U_high * v_high.z;
+          F[i][j][k][0]   = Az * U_low * v_low.z;
+          F[i][j][k+1][0] = Az * U_high * v_high.z;
         }
       }
     }
   }
 
   real_t V = dx * dy * dz;
-  real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
   pos = 0;
   str_grid_patch_t* rhs_patch;
   while (str_grid_cell_data_next_patch(dXdt, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
   {
     str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
-    str_grid_patch_t* y_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
-    str_grid_patch_t* z_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
+    str_grid_patch_t* y_face_patch = str_grid_face_data_y_patch(adv->F_work, ip, jp, kp);
+    str_grid_patch_t* z_face_patch = str_grid_face_data_z_patch(adv->F_work, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(dUdt, rhs_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fx, x_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fy, y_face_patch);
@@ -409,13 +409,21 @@ static int advect_rhs(void* context,
       {
         for (int k = rhs_patch->k1; k < rhs_patch->k2; ++k)
         {
-          // dUdt and the fluxes happen to share similar indexing, since 
-          // they have no ghost values. The only difference is that the 
-          // fluxes have an extra datum in their preferred direction.
-          // But no index translation is needed here.
-          real_t div_F = Ax * (Fx[i+1][j][k][0] - Fx[i][j][k][0]) + 
-                         Ay * (Fy[i][j+1][k][0] - Fy[i][j][k][0]) + 
-                         Az * (Fz[i][j][k+1][0] - Fz[i][j][k][0]);
+          // Translate i, j, k (cell indices) to the various x-, y-, and z-face indices.
+          int ifx, jfx, kfx;
+          str_grid_patch_translate_indices(rhs_patch, i, j, k,
+                                           x_face_patch, &ifx, &jfx, &kfx);
+          int ify, jfy, kfy;
+          str_grid_patch_translate_indices(rhs_patch, i, j, k,
+                                           y_face_patch, &ify, &jfy, &kfy);
+          int ifz, jfz, kfz;
+          str_grid_patch_translate_indices(rhs_patch, i, j, k,
+                                           z_face_patch, &ifz, &jfz, &kfz);
+
+          // Compute the right hand side.
+          real_t div_F = Fx[ifx+1][jfx][kfx][0] - Fx[ifx][jfx][kfx][0] + 
+                         Fy[ify][jfy+1][kfy][0] - Fy[ify][jfy][kfy][0] + 
+                         Fz[ifz][jfz][kfz+1][0] - Fz[ifz][jfz][kfz][0];
           dUdt[i][j][k][0] = -div_F / V;
         }
       }
