@@ -18,10 +18,10 @@
 #include "model/model.h"
 
 // Fortran-style SIGN function
-#define SIGN_VAL(A, B) (B >= 0.0) ? ABS(A) : -ABS(A)
+#define SIGN_VAL(A, B) ((B >= 0.0) ? ABS(A) : -ABS(A))
 
 // Uncomment this to use first-order upwinding.
-#define ADVECT_FIRST_ORDER
+//#define ADVECT_FIRST_ORDER
 
 //------------------------------------------------------------------------
 //                  Lua functions specific to this model
@@ -318,6 +318,10 @@ static void advect_clear(advect_t* adv)
     str_ode_integrator_free(adv->integ);
   if (adv->U != NULL)
     str_grid_cell_data_free(adv->U);
+  if (adv->UL != NULL)
+    str_grid_cell_data_free(adv->UL);
+  if (adv->UH != NULL)
+    str_grid_cell_data_free(adv->UH);
   if (adv->F != NULL)
     str_grid_face_data_free(adv->F);
   if (adv->V != NULL)
@@ -335,10 +339,10 @@ static void extrapolate_U_to_faces(advect_t* adv,
 
   int pos, ip, jp, kp;
   bbox_t bbox;
+  str_grid_patch_t* V_patch;
 
   // Traverse the patches and extrapolate U to x-faces.
   pos = 0;
-  str_grid_patch_t* V_patch;
   while (str_grid_face_data_next_x_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
     str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
@@ -600,7 +604,7 @@ static void compute_fluxes(advect_t* adv,
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
           real_t V = Vx[i][j][k][0];
-          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc][0] : UL[ic+1][jc][kc][0];
+          real_t U_flux = (V >= 0.0) ? UH[ic-1][jc][kc][0] : UL[ic][jc][kc][0];
           Fx[i][j][k][0] = Ax * V * U_flux;
         }
       }
@@ -630,7 +634,7 @@ static void compute_fluxes(advect_t* adv,
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
           real_t V = Vy[i][j][k][0];
-          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc][1] : UL[ic][jc+1][kc][1];
+          real_t U_flux = (V >= 0.0) ? UH[ic][jc-1][kc][1] : UL[ic][jc][kc][1];
           Fy[i][j][k][0] = Ay * V * U_flux;
         }
       }
@@ -659,7 +663,7 @@ static void compute_fluxes(advect_t* adv,
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
           real_t V = Vz[i][j][k][0];
-          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc][2] : UL[ic][jc][kc+1][2];
+          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc-1][2] : UL[ic][jc][kc][2];
           Fz[i][j][k][0] = Az * V * U_flux;
         }
       }
@@ -695,13 +699,13 @@ static int advect_rhs(void* context,
   str_grid_patch_t* rhs_patch;
   while (str_grid_cell_data_next_patch(dUdt, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
   {
-    str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
-    str_grid_patch_t* y_face_patch = str_grid_face_data_y_patch(adv->F, ip, jp, kp);
-    str_grid_patch_t* z_face_patch = str_grid_face_data_z_patch(adv->F, ip, jp, kp);
+    str_grid_patch_t* Fx_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
+    str_grid_patch_t* Fy_patch = str_grid_face_data_y_patch(adv->F, ip, jp, kp);
+    str_grid_patch_t* Fz_patch = str_grid_face_data_z_patch(adv->F, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(dUdt, rhs_patch);
-    DECLARE_STR_GRID_PATCH_ARRAY(Fx, x_face_patch);
-    DECLARE_STR_GRID_PATCH_ARRAY(Fy, y_face_patch);
-    DECLARE_STR_GRID_PATCH_ARRAY(Fz, z_face_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Fx, Fx_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Fy, Fy_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Fz, Fz_patch);
 
     for (int i = rhs_patch->i1; i < rhs_patch->i2; ++i)
     {
@@ -712,13 +716,13 @@ static int advect_rhs(void* context,
           // Translate i, j, k (cell indices) to the various x-, y-, and z-face indices.
           int ifx, jfx, kfx;
           str_grid_patch_translate_indices(rhs_patch, i, j, k,
-                                           x_face_patch, &ifx, &jfx, &kfx);
+                                           Fx_patch, &ifx, &jfx, &kfx);
           int ify, jfy, kfy;
           str_grid_patch_translate_indices(rhs_patch, i, j, k,
-                                           y_face_patch, &ify, &jfy, &kfy);
+                                           Fy_patch, &ify, &jfy, &kfy);
           int ifz, jfz, kfz;
           str_grid_patch_translate_indices(rhs_patch, i, j, k,
-                                           z_face_patch, &ifz, &jfz, &kfz);
+                                           Fz_patch, &ifz, &jfz, &kfz);
 
           // Compute the right hand side.
           real_t div_F = Fx[ifx+1][jfx][kfx][0] - Fx[ifx][jfx][kfx][0] + 
@@ -835,8 +839,8 @@ static void advect_setup(advect_t* adv)
 
   // Create work "vectors."
   adv->F = str_grid_face_data_new(adv->grid, 1);
-  adv->UL = str_grid_cell_data_new(adv->grid, 3, 1);
-  adv->UH = str_grid_cell_data_new(adv->grid, 3, 1);
+  adv->UL = str_grid_cell_data_new(adv->grid, 3*num_comps, num_ghost_layers);
+  adv->UH = str_grid_cell_data_new(adv->grid, 3*num_comps, num_ghost_layers);
   adv->V = str_grid_face_data_new(adv->grid, 1);
 
   // Create the ARK integrator.
@@ -905,6 +909,11 @@ static void advect_plot(void* context, const char* prefix, const char* directory
   silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
   const char* U_name[] = {"U"};
   silo_file_write_str_grid_cell_data(silo, U_name, "grid", adv->U, NULL, adv->mapping);
+extrapolate_U_to_faces(adv, t, adv->U, adv->UL, adv->UH, adv->V);
+const char* UL_names[] = {"ULx", "ULy", "ULz"};
+silo_file_write_str_grid_cell_data(silo, UL_names, "grid", adv->UL, NULL, adv->mapping);
+const char* UH_names[] = {"UHx", "UHy", "UHz"};
+silo_file_write_str_grid_cell_data(silo, UH_names, "grid", adv->UH, NULL, adv->mapping);
 
   // Compute and plot the velocity field.
   {
