@@ -429,11 +429,11 @@ static void extrapolate_U_to_faces(advect_t* adv,
     point_t x_low, x_high;
     for (int i = V_patch->i1; i < V_patch->i2; ++i) 
     {
-      x_low.x = bbox.x1 + i * dx;
-      x_high.x = x_low.x + dx;
+      x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
       for (int j = V_patch->j1; j < V_patch->j2-1; ++j)
       {
-        x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
+        x_low.y = bbox.y1 + j * dy;
+        x_high.y = x_low.y + dy;
         for (int k = V_patch->k1; k < V_patch->k2; ++k)
         {
           x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
@@ -504,14 +504,14 @@ static void extrapolate_U_to_faces(advect_t* adv,
     point_t x_low, x_high;
     for (int i = V_patch->i1; i < V_patch->i2; ++i) 
     {
-      x_low.x = bbox.x1 + i * dx;
-      x_high.x = x_low.x + dx;
+      x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
       for (int j = V_patch->j1; j < V_patch->j2; ++j)
       {
         x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
         for (int k = V_patch->k1; k < V_patch->k2-1; ++k)
         {
-          x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
+          x_low.z = bbox.z1 + k * dz;
+          x_high.z = x_low.z + dz;
 
           // Get the velocity at the low and high faces, recording 
           // the x-velocities.
@@ -519,7 +519,7 @@ static void extrapolate_U_to_faces(advect_t* adv,
           st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
           st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
           Vz[i][j][k][0] = v_low.z;
-          Vz[i+1][j][k][0] = v_high.z;
+          Vz[i][j][k+1][0] = v_high.z;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
@@ -596,14 +596,12 @@ static void compute_fluxes(advect_t* adv,
       {
         for (int k = F_patch->k1; k < F_patch->k2; ++k)
         {
-          real_t V = Vx[i][j][k][0];
-          real_t s = SIGN(V);
           int ic, jc, kc; // <-- cell indices
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
-          real_t F1 = 0.5 * (1.0 + s) * V * UH[ic][jc][kc][0];
-          real_t F2 = 0.5 * (1.0 - s) * V * UL[ic+1][jc][kc][0];
-          Fx[i][j][k][0] = Ax * (F1 + F2);
+          real_t V = Vx[i][j][k][0];
+          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc][0] : UL[ic+1][jc][kc][0];
+          Fx[i][j][k][0] = Ax * V * U_flux;
         }
       }
     }
@@ -628,14 +626,12 @@ static void compute_fluxes(advect_t* adv,
       {
         for (int k = F_patch->k1; k < F_patch->k2; ++k)
         {
-          real_t V = Vy[i][j][k][0];
-          real_t s = SIGN(V);
           int ic, jc, kc; // <-- cell indices
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
-          real_t F1 = 0.5 * (1.0 + s) * V * UH[ic][jc][kc][1];
-          real_t F2 = 0.5 * (1.0 - s) * V * UL[ic][jc+1][kc][1];
-          Fy[i][j][k][0] = Ay * (F1 + F2);
+          real_t V = Vy[i][j][k][0];
+          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc][1] : UL[ic][jc+1][kc][1];
+          Fy[i][j][k][0] = Ay * V * U_flux;
         }
       }
     }
@@ -659,14 +655,12 @@ static void compute_fluxes(advect_t* adv,
       {
         for (int k = F_patch->k1; k < F_patch->k2; ++k)
         {
-          real_t V = Vz[i][j][k][0];
-          real_t s = SIGN(V);
           int ic, jc, kc; // <-- cell indices
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
-          real_t F1 = 0.5 * (1.0 + s) * V * UH[ic][jc][kc][2];
-          real_t F2 = 0.5 * (1.0 - s) * V * UL[ic][jc][kc+1][2];
-          Fz[i][j][k][0] = Az * (F1 + F2);
+          real_t V = Vz[i][j][k][0];
+          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc][2] : UL[ic][jc][kc+1][2];
+          Fz[i][j][k][0] = Az * V * U_flux;
         }
       }
     }
