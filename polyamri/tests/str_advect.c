@@ -17,6 +17,12 @@
 #include "polyamri/silo_file_str_methods.h"
 #include "model/model.h"
 
+// Fortran-style SIGN function
+#define SIGN_VAL(A, B) (B >= 0.0) ? ABS(A) : -ABS(A)
+
+// Uncomment this to use first-order upwinding.
+#define ADVECT_FIRST_ORDER
+
 //------------------------------------------------------------------------
 //                  Lua functions specific to this model
 //------------------------------------------------------------------------
@@ -177,7 +183,7 @@ typedef struct
   st_func_t* U0;
 
   // Velocity field.
-  st_func_t* V;
+  st_func_t* V_func;
   real_t V_max;
 
   // Flux limiter function.
@@ -185,7 +191,10 @@ typedef struct
 
   // Time integrator and workspace.
   str_ode_integrator_t* integ;
-  str_grid_face_data_t* F_work;
+  str_grid_cell_data_t* UL;
+  str_grid_cell_data_t* UH;
+  str_grid_face_data_t* V;
+  str_grid_face_data_t* F;
   char max_dt_reason[POLYMEC_MODEL_MAXDT_REASON_SIZE];
 } advect_t;
 
@@ -201,7 +210,7 @@ static void advect_read_input(void* context,
   advect_t* adv = context;
 
   adv->U0 = interpreter_get_scalar_function(interp, "initial_state");
-  adv->V = interpreter_get_vector_function(interp, "velocity");
+  adv->V_func = interpreter_get_vector_function(interp, "velocity");
   adv->grid = interpreter_get_str_grid(interp, "grid");
 
   // Computational domain can either be a bounding box or a coordinate 
@@ -224,7 +233,7 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
   advect_t* adv = context;
   real_t dx = MIN(adv->dx, MIN(adv->dy, adv->dz));
 
-  if ((adv->V_max == -FLT_MAX) || !st_func_is_constant(adv->V))
+  if ((adv->V_max == -FLT_MAX) || !st_func_is_constant(adv->V_func))
   {
     // We compute the maximum allowable timestep using the CFL condition, 
     // measuring the velocity at each of the face centers at the given time and 
@@ -247,7 +256,7 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
           for (int k = patch->k1; k < patch->k2; ++k)
           {
             x.z = bbox.z1 + (k + 0.5) * adv->dz;
-            st_func_eval(adv->V, &x, t, (real_t*)&v);
+            st_func_eval(adv->V_func, &x, t, (real_t*)&v);
             adv->V_max = MAX(adv->V_max, vector_mag(&v));
           }
         }
@@ -263,7 +272,7 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
           for (int k = patch->k1; k < patch->k2; ++k)
           {
             x.z = bbox.z1 + (k + 0.5) * adv->dz;
-            st_func_eval(adv->V, &x, t, (real_t*)&v);
+            st_func_eval(adv->V_func, &x, t, (real_t*)&v);
             adv->V_max = MAX(adv->V_max, vector_mag(&v));
           }
         }
@@ -279,7 +288,7 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
           for (int k = patch->k1; k <= patch->k2; ++k)
           {
             x.z = bbox.z1 + k * adv->dz;
-            st_func_eval(adv->V, &x, t, (real_t*)&v);
+            st_func_eval(adv->V_func, &x, t, (real_t*)&v);
             adv->V_max = MAX(adv->V_max, vector_mag(&v));
           }
         }
@@ -309,73 +318,68 @@ static void advect_clear(advect_t* adv)
     str_ode_integrator_free(adv->integ);
   if (adv->U != NULL)
     str_grid_cell_data_free(adv->U);
-  if (adv->F_work != NULL)
-    str_grid_face_data_free(adv->F_work);
+  if (adv->F != NULL)
+    str_grid_face_data_free(adv->F);
+  if (adv->V != NULL)
+    str_grid_face_data_free(adv->V);
 }
 
-// Uncomment this to use first-order upwinding.
-//#define ADVECT_FIRST_ORDER
-
-static void compute_x_fluxes(advect_t* adv,
-                             real_t t,
-                             str_grid_cell_data_t* U,
-                             str_grid_face_data_t* F)
+static void extrapolate_U_to_faces(advect_t* adv,
+                                   real_t t,
+                                   str_grid_cell_data_t* U,
+                                   str_grid_cell_data_t* UL,
+                                   str_grid_cell_data_t* UH,
+                                   str_grid_face_data_t* V)
 {
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
-  real_t Ax = dy * dz;
-
-  // Make some work patches for calculating flux quantities.
-  int nx, ny, nz;
-  str_grid_get_patch_size(adv->grid, &nx, &ny, &nz);
-  str_grid_patch_t* UL_patch = str_grid_patch_new(nx, ny, nz, 1, 0);
-  str_grid_patch_t* UH_patch = str_grid_patch_new(nx, ny, nz, 1, 0);
-  str_grid_patch_t* Vx_patch = str_grid_patch_new(nx+1, ny, nz, 1, 0);
 
   int pos, ip, jp, kp;
-  str_grid_patch_t* F_patch;
   bbox_t bbox;
 
-  // Traverse the patches and compute the fluxes through x-faces.
+  // Traverse the patches and extrapolate U to x-faces.
   pos = 0;
-  while (str_grid_face_data_next_x_patch(adv->F_work, &pos, &ip, &jp, &kp, &F_patch, &bbox))
+  str_grid_patch_t* V_patch;
+  while (str_grid_face_data_next_x_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
     str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
 
     // Compute "low" and "high" values of U on the x-faces of the cells.
     DECLARE_STR_GRID_PATCH_ARRAY(U, U_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
-    DECLARE_STR_GRID_PATCH_ARRAY(Vx, Vx_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Vx, V_patch);
 
     point_t x_low, x_high;
-    for (int i = F_patch->i1; i < F_patch->i2-1; ++i) 
+    for (int i = V_patch->i1; i < V_patch->i2-1; ++i) 
     {
       x_low.x = bbox.x1 + i * dx;
       x_high.x = x_low.x + dx;
-      for (int j = F_patch->j1; j < F_patch->j2; ++j)
+      for (int j = V_patch->j1; j < V_patch->j2; ++j)
       {
         x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
-        for (int k = F_patch->k1; k < F_patch->k2; ++k)
+        for (int k = V_patch->k1; k < V_patch->k2; ++k)
         {
           x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces, recording 
-          // the x-velocities.
+          // the velocities.
           vector_t v_low, v_high;
-          st_func_eval(adv->V, &x_low, t, (real_t*)&v_low);
-          st_func_eval(adv->V, &x_high, t, (real_t*)&v_high);
+          st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
+          st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
           Vx[i][j][k][0] = v_low.x;
           Vx[i+1][j][k][0] = v_high.x;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
           int ic, jc, kc; // <-- cell indices
-          str_grid_patch_translate_indices(F_patch, i, j, k,
+          str_grid_patch_translate_indices(V_patch, i, j, k,
                                            U_patch, &ic, &jc, &kc);
 #ifdef ADVECT_FIRST_ORDER 
           // Get the values of U at the low and high faces.
-          real_t U_low = (v_low.x >= 0.0) ? U[ic-1][jc][kc][0] : U[ic][jc][kc][0];
-          real_t U_high = (v_high.x >= 0.0) ? U[ic][jc][kc][0] : U[ic+1][jc][kc][0];
+          UL[ic][jc][kc][0] = (v_low.x >= 0.0) ? U[ic-1][jc][kc][0] : U[ic][jc][kc][0];
+          UH[ic][jc][kc][0] = (v_high.x >= 0.0) ? U[ic][jc][kc][0] : U[ic+1][jc][kc][0];
 #else
           // Use the MUSCL-Hancock method to get a 2nd-order accurate flux.
           real_t U_minus = U[ic-1][jc][kc][0];
@@ -390,110 +394,70 @@ static void compute_x_fluxes(advect_t* adv,
 
           // Reset small deltas, preserving sign.
           static const real_t tol = 1e-6;
-          if (ABS(delta_upwind < tol))
-            delta_upwind = tol * SIGN(delta_upwind);
-          if (ABS(delta_loc < tol))
-            delta_loc = tol * SIGN(delta_loc);
+          if (ABS(delta_upwind) < tol)
+            delta_upwind = tol * SIGN_VAL(1.0, delta_upwind);
+          if (ABS(delta_loc) < tol)
+            delta_loc = tol * SIGN_VAL(1.0, delta_loc);
 
           // Compute the ratio of slopes and apply the appropriate limiter.
           real_t ratio = delta_upwind/delta_loc;
           delta = adv->limit_delta(ratio, omega, delta);
 
           // Boundary extrapolated values.
-          UL[i][j][k][0] = U_0 + 0.5 * delta;
-          UH[i][j][k][0] = U_0 + 0.5 * delta;
+          UL[ic][jc][kc][0] = U_0 - 0.5 * delta;
+          UH[ic][jc][kc][0] = U_0 + 0.5 * delta;
 #endif
-        }
-      }
-    }
-
-    // Now compute the flux through x-faces.
-    DECLARE_STR_GRID_PATCH_ARRAY(F, F_patch);
-    for (int i = F_patch->i1; i < F_patch->i2; ++i)
-    {
-      for (int j = F_patch->j1; j < F_patch->j2; ++j)
-      {
-        for (int k = F_patch->k1; k < F_patch->k2; ++k)
-        {
-          real_t V = Vx[i][j][k][0];
-          real_t s = SIGN(V);
-          real_t F1 = 0.5 * (1.0 + s) * V * UH[i][j][k][0];
-          real_t F2 = 0.5 * (1.0 - s) * V * UL[i+1][j][k][0];
-          F[i][j][k][0] = Ax * (F1 + F2);
         }
       }
     }
   }
 
-  // Clean up.
-  str_grid_patch_free(UL_patch);
-  str_grid_patch_free(UH_patch);
-  str_grid_patch_free(Vx_patch);
-}
-
-static void compute_y_fluxes(advect_t* adv,
-                             real_t t,
-                             str_grid_cell_data_t* U,
-                             str_grid_face_data_t* F)
-{
-  real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
-  real_t Ay = dz * dx;
-
-  // Make some work patches for calculating flux quantities.
-  int nx, ny, nz;
-  str_grid_get_patch_size(adv->grid, &nx, &ny, &nz);
-  str_grid_patch_t* UL_patch = str_grid_patch_new(nx, ny, nz, 1, 0);
-  str_grid_patch_t* UH_patch = str_grid_patch_new(nx, ny, nz, 1, 0);
-  str_grid_patch_t* Vy_patch = str_grid_patch_new(nx, ny+1, nz, 1, 0);
-
-  int pos, ip, jp, kp;
-  str_grid_patch_t* F_patch;
-  bbox_t bbox;
-
-  // Traverse the patches and compute the fluxes through y-faces.
+  // Traverse the patches and extrapolate U to y-faces.
   pos = 0;
-  while (str_grid_face_data_next_y_patch(adv->F_work, &pos, &ip, &jp, &kp, &F_patch, &bbox))
+  while (str_grid_face_data_next_y_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
     str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
 
     // Compute "low" and "high" values of U on the y-faces of the cells.
     DECLARE_STR_GRID_PATCH_ARRAY(U, U_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
-    DECLARE_STR_GRID_PATCH_ARRAY(Vy, Vy_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Vy, V_patch);
 
     point_t x_low, x_high;
-    for (int i = F_patch->i1; i < F_patch->i2-1; ++i) 
+    for (int i = V_patch->i1; i < V_patch->i2; ++i) 
     {
       x_low.x = bbox.x1 + i * dx;
       x_high.x = x_low.x + dx;
-      for (int j = F_patch->j1; j < F_patch->j2; ++j)
+      for (int j = V_patch->j1; j < V_patch->j2-1; ++j)
       {
         x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
-        for (int k = F_patch->k1; k < F_patch->k2; ++k)
+        for (int k = V_patch->k1; k < V_patch->k2; ++k)
         {
           x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces, recording 
           // the y-velocities.
           vector_t v_low, v_high;
-          st_func_eval(adv->V, &x_low, t, (real_t*)&v_low);
-          st_func_eval(adv->V, &x_high, t, (real_t*)&v_high);
+          st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
+          st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
           Vy[i][j][k][0] = v_low.y;
           Vy[i][j+1][k][0] = v_high.y;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
           int ic, jc, kc; // <-- cell indices
-          str_grid_patch_translate_indices(F_patch, i, j, k,
+          str_grid_patch_translate_indices(V_patch, i, j, k,
                                            U_patch, &ic, &jc, &kc);
 #ifdef ADVECT_FIRST_ORDER 
           // Get the values of U at the low and high faces.
-          real_t U_low = (v_low.y >= 0.0) ? U[ic][jc-1][kc][0] : U[ic][jc][kc][0];
-          real_t U_high = (v_high.y >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc+1][kc][0];
+          UL[ic][jc][kc][1] = (v_low.y >= 0.0) ? U[ic][jc-1][kc][0] : U[ic][jc][kc][0];
+          UH[ic][jc][kc][1] = (v_high.y >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc+1][kc][0];
 #else
           // Use the MUSCL-Hancock method to get a 2nd-order accurate flux.
-          real_t U_minus = U[ic][jc+1][kc][0];
+          real_t U_minus = U[ic][jc-1][kc][0];
           real_t U_0     = U[ic][jc][kc][0];
           real_t U_plus  = U[ic][jc+1][kc][0];
           real_t delta_upwind = (v_low.y >= 0.0) ? U_0 - U_minus : U_plus - U_0;
@@ -505,107 +469,67 @@ static void compute_y_fluxes(advect_t* adv,
 
           // Reset small deltas, preserving sign.
           static const real_t tol = 1e-6;
-          if (ABS(delta_upwind < tol))
-            delta_upwind = tol * SIGN(delta_upwind);
-          if (ABS(delta_loc < tol))
-            delta_loc = tol * SIGN(delta_loc);
+          if (ABS(delta_upwind) < tol)
+            delta_upwind = tol * SIGN_VAL(1.0, delta_upwind);
+          if (ABS(delta_loc) < tol)
+            delta_loc = tol * SIGN_VAL(1.0, delta_loc);
 
           // Compute the ratio of slopes and apply the appropriate limiter.
           real_t ratio = delta_upwind/delta_loc;
           delta = adv->limit_delta(ratio, omega, delta);
 
           // Boundary extrapolated values.
-          UL[i][j][k][0] = U_0 + 0.5 * delta;
-          UH[i][j][k][0] = U_0 + 0.5 * delta;
+          UL[ic][jc][kc][1] = U_0 - 0.5 * delta;
+          UH[ic][jc][kc][1] = U_0 + 0.5 * delta;
 #endif
-        }
-      }
-    }
-
-    // Now compute the flux through y-faces.
-    DECLARE_STR_GRID_PATCH_ARRAY(F, F_patch);
-    for (int i = F_patch->i1; i < F_patch->i2; ++i)
-    {
-      for (int j = F_patch->j1; j < F_patch->j2; ++j)
-      {
-        for (int k = F_patch->k1; k < F_patch->k2; ++k)
-        {
-          real_t V = Vy[i][j][k][0];
-          real_t s = SIGN(V);
-          real_t F1 = 0.5 * (1.0 + s) * V * UH[i][j][k][0];
-          real_t F2 = 0.5 * (1.0 - s) * V * UL[i][j+1][k][0];
-          F[i][j][k][0] = Ay * (F1 + F2);
         }
       }
     }
   }
 
-  // Clean up.
-  str_grid_patch_free(UL_patch);
-  str_grid_patch_free(UH_patch);
-  str_grid_patch_free(Vy_patch);
-}
-
-static void compute_z_fluxes(advect_t* adv,
-                             real_t t,
-                             str_grid_cell_data_t* U,
-                             str_grid_face_data_t* F)
-{
-  real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
-  real_t Az = dx * dy;
-
-  // Make some work patches for calculating flux quantities.
-  int nx, ny, nz;
-  str_grid_get_patch_size(adv->grid, &nx, &ny, &nz);
-  str_grid_patch_t* UL_patch = str_grid_patch_new(nx, ny, nz, 1, 0);
-  str_grid_patch_t* UH_patch = str_grid_patch_new(nx, ny, nz, 1, 0);
-  str_grid_patch_t* Vz_patch = str_grid_patch_new(nx, ny, nz+1, 1, 0);
-
-  int pos, ip, jp, kp;
-  str_grid_patch_t* F_patch;
-  bbox_t bbox;
-
-  // Traverse the patches and compute the fluxes through z-faces.
+  // Traverse the patches and extrapolate U to z-faces.
   pos = 0;
-  while (str_grid_face_data_next_z_patch(adv->F_work, &pos, &ip, &jp, &kp, &F_patch, &bbox))
+  while (str_grid_face_data_next_z_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
     str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
 
     // Compute "low" and "high" values of U on the x-faces of the cells.
     DECLARE_STR_GRID_PATCH_ARRAY(U, U_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
-    DECLARE_STR_GRID_PATCH_ARRAY(Vz, Vz_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Vz, V_patch);
 
     point_t x_low, x_high;
-    for (int i = F_patch->i1; i < F_patch->i2; ++i) 
+    for (int i = V_patch->i1; i < V_patch->i2; ++i) 
     {
       x_low.x = bbox.x1 + i * dx;
       x_high.x = x_low.x + dx;
-      for (int j = F_patch->j1; j < F_patch->j2; ++j)
+      for (int j = V_patch->j1; j < V_patch->j2; ++j)
       {
         x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
-        for (int k = F_patch->k1; k < F_patch->k2-1; ++k)
+        for (int k = V_patch->k1; k < V_patch->k2-1; ++k)
         {
           x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces, recording 
           // the x-velocities.
           vector_t v_low, v_high;
-          st_func_eval(adv->V, &x_low, t, (real_t*)&v_low);
-          st_func_eval(adv->V, &x_high, t, (real_t*)&v_high);
-          Vz[i][j][k][0] = v_low.x;
-          Vz[i+1][j][k][0] = v_high.x;
+          st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
+          st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
+          Vz[i][j][k][0] = v_low.z;
+          Vz[i+1][j][k][0] = v_high.z;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
           int ic, jc, kc; // <-- cell indices
-          str_grid_patch_translate_indices(F_patch, i, j, k,
+          str_grid_patch_translate_indices(V_patch, i, j, k,
                                            U_patch, &ic, &jc, &kc);
 #ifdef ADVECT_FIRST_ORDER 
           // Get the values of U at the low and high faces.
-          real_t U_low = (v_low.z >= 0.0) ? U[ic][jc][kc-1][0] : U[ic][jc][kc][0];
-          real_t U_high = (v_high.z >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc][kc+1][0];
+          UL[ic][jc][kc][2] = (v_low.z >= 0.0) ? U[ic][jc][kc-1][0] : U[ic][jc][kc][0];
+          UH[ic][jc][kc][2] = (v_high.z >= 0.0) ? U[ic][jc][kc][0] : U[ic][jc][kc+1][0];
 #else
           // Use the MUSCL-Hancock method to get a 2nd-order accurate flux.
           real_t U_minus = U[ic][jc][kc-1][0];
@@ -620,25 +544,115 @@ static void compute_z_fluxes(advect_t* adv,
 
           // Reset small deltas, preserving sign.
           static const real_t tol = 1e-6;
-          if (ABS(delta_upwind < tol))
-            delta_upwind = tol * SIGN(delta_upwind);
-          if (ABS(delta_loc < tol))
-            delta_loc = tol * SIGN(delta_loc);
+          if (ABS(delta_upwind) < tol)
+            delta_upwind = tol * SIGN_VAL(1.0, delta_upwind);
+          if (ABS(delta_loc) < tol)
+            delta_loc = tol * SIGN_VAL(1.0, delta_loc);
 
           // Compute the ratio of slopes and apply the appropriate limiter.
           real_t ratio = delta_upwind/delta_loc;
           delta = adv->limit_delta(ratio, omega, delta);
 
           // Boundary extrapolated values.
-          UL[i][j][k][0] = U_0 + 0.5 * delta;
-          UH[i][j][k][0] = U_0 + 0.5 * delta;
+          UL[ic][jc][kc][2] = U_0 - 0.5 * delta;
+          UH[ic][jc][kc][2] = U_0 + 0.5 * delta;
 #endif
         }
       }
     }
+  }
+}
+                      
+static void compute_fluxes(advect_t* adv,
+                           real_t t,
+                           str_grid_cell_data_t* UL,
+                           str_grid_cell_data_t* UH,
+                           str_grid_face_data_t* V,
+                           str_grid_face_data_t* F)
+{
+  real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
+  real_t Ax = dy * dz, Ay = dz * dx, Az = dx * dy;
 
-    // Now compute the flux through z-faces.
-    DECLARE_STR_GRID_PATCH_ARRAY(F, F_patch);
+  int pos, ip, jp, kp;
+  str_grid_patch_t* F_patch;
+  bbox_t bbox;
+
+  // Traverse the patches and compute the fluxes through x-faces.
+  pos = 0;
+  while (str_grid_face_data_next_x_patch(F, &pos, &ip, &jp, &kp, &F_patch, &bbox))
+  {
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* Vx_patch = str_grid_face_data_x_patch(V, ip, jp, kp);
+
+    DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Vx, Vx_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Fx, F_patch);
+
+    for (int i = F_patch->i1; i < F_patch->i2; ++i)
+    {
+      for (int j = F_patch->j1; j < F_patch->j2; ++j)
+      {
+        for (int k = F_patch->k1; k < F_patch->k2; ++k)
+        {
+          real_t V = Vx[i][j][k][0];
+          real_t s = SIGN(V);
+          int ic, jc, kc; // <-- cell indices
+          str_grid_patch_translate_indices(F_patch, i, j, k,
+                                           UL_patch, &ic, &jc, &kc);
+          real_t F1 = 0.5 * (1.0 + s) * V * UH[ic][jc][kc][0];
+          real_t F2 = 0.5 * (1.0 - s) * V * UL[ic+1][jc][kc][0];
+          Fx[i][j][k][0] = Ax * (F1 + F2);
+        }
+      }
+    }
+  }
+
+  // Now compute the fluxes through y-faces.
+  pos = 0;
+  while (str_grid_face_data_next_y_patch(F, &pos, &ip, &jp, &kp, &F_patch, &bbox))
+  {
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* Vy_patch = str_grid_face_data_y_patch(V, ip, jp, kp);
+
+    DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Vy, Vy_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Fy, F_patch);
+
+    for (int i = F_patch->i1; i < F_patch->i2; ++i)
+    {
+      for (int j = F_patch->j1; j < F_patch->j2; ++j)
+      {
+        for (int k = F_patch->k1; k < F_patch->k2; ++k)
+        {
+          real_t V = Vy[i][j][k][0];
+          real_t s = SIGN(V);
+          int ic, jc, kc; // <-- cell indices
+          str_grid_patch_translate_indices(F_patch, i, j, k,
+                                           UL_patch, &ic, &jc, &kc);
+          real_t F1 = 0.5 * (1.0 + s) * V * UH[ic][jc][kc][1];
+          real_t F2 = 0.5 * (1.0 - s) * V * UL[ic][jc+1][kc][1];
+          Fy[i][j][k][0] = Ay * (F1 + F2);
+        }
+      }
+    }
+  }
+
+  // Now through z-faces.
+  pos = 0;
+  while (str_grid_face_data_next_z_patch(F, &pos, &ip, &jp, &kp, &F_patch, &bbox))
+  {
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* Vz_patch = str_grid_face_data_z_patch(V, ip, jp, kp);
+
+    DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Vz, Vz_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(Fz, UL_patch);
     for (int i = F_patch->i1; i < F_patch->i2; ++i)
     {
       for (int j = F_patch->j1; j < F_patch->j2; ++j)
@@ -647,46 +661,49 @@ static void compute_z_fluxes(advect_t* adv,
         {
           real_t V = Vz[i][j][k][0];
           real_t s = SIGN(V);
-          real_t F1 = 0.5 * (1.0 + s) * V * UH[i][j][k][0];
-          real_t F2 = 0.5 * (1.0 - s) * V * UL[i+1][j][k][0];
-          F[i][j][k][0] = Az * (F1 + F2);
+          int ic, jc, kc; // <-- cell indices
+          str_grid_patch_translate_indices(F_patch, i, j, k,
+                                           UL_patch, &ic, &jc, &kc);
+          real_t F1 = 0.5 * (1.0 + s) * V * UH[ic][jc][kc][2];
+          real_t F2 = 0.5 * (1.0 - s) * V * UL[ic][jc][kc+1][2];
+          Fz[i][j][k][0] = Az * (F1 + F2);
         }
       }
     }
   }
-
-  // Clean up.
-  str_grid_patch_free(UL_patch);
-  str_grid_patch_free(UH_patch);
-  str_grid_patch_free(Vz_patch);
 }
 
 // Here's the right-hand side for the ARK integrator.
 static int advect_rhs(void* context, 
                       real_t t, 
-                      str_grid_cell_data_t* X, 
-                      str_grid_cell_data_t* dXdt)
+                      str_grid_cell_data_t* U, 
+                      str_grid_cell_data_t* dUdt)
 {
   advect_t* adv = context;
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
 
   // Make sure ghost cells are filled.
-  str_grid_cell_data_fill_ghosts(X);
+  str_grid_cell_data_fill_ghosts(U);
 
-  // Compute the x, y, and z fluxes.
-  compute_x_fluxes(adv, t, X, adv->F_work);
-  compute_y_fluxes(adv, t, X, adv->F_work);
-  compute_z_fluxes(adv, t, X, adv->F_work);
+  // Extrapolate U to faces and compute face velocities.
+  extrapolate_U_to_faces(adv, t, U, adv->UL, adv->UH, adv->V);
 
-  // Now compute the flux divergence.
+  // Fill ghost cells for UL and UH, the extrapolated values of U.
+  str_grid_cell_data_fill_ghosts(adv->UL);
+  str_grid_cell_data_fill_ghosts(adv->UH);
+
+  // Compute fluxes.
+  compute_fluxes(adv, t, adv->UL, adv->UH, adv->V, adv->F);
+
+  // Finally, compute the flux divergence.
   real_t V = dx * dy * dz;
   int pos = 0, ip, jp, kp;
   str_grid_patch_t* rhs_patch;
-  while (str_grid_cell_data_next_patch(dXdt, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
+  while (str_grid_cell_data_next_patch(dUdt, &pos, &ip, &jp, &kp, &rhs_patch, NULL))
   {
-    str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F_work, ip, jp, kp);
-    str_grid_patch_t* y_face_patch = str_grid_face_data_y_patch(adv->F_work, ip, jp, kp);
-    str_grid_patch_t* z_face_patch = str_grid_face_data_z_patch(adv->F_work, ip, jp, kp);
+    str_grid_patch_t* x_face_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
+    str_grid_patch_t* y_face_patch = str_grid_face_data_y_patch(adv->F, ip, jp, kp);
+    str_grid_patch_t* z_face_patch = str_grid_face_data_z_patch(adv->F, ip, jp, kp);
     DECLARE_STR_GRID_PATCH_ARRAY(dUdt, rhs_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fx, x_face_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fy, y_face_patch);
@@ -750,7 +767,7 @@ static void override_algorithm_options(options_t* options,
 static void advect_setup(advect_t* adv)
 {
   ASSERT(st_func_num_comp(adv->U0) == 1);
-  ASSERT(st_func_num_comp(adv->V) == 3);
+  ASSERT(st_func_num_comp(adv->V_func) == 3);
 
   advect_clear(adv);
 
@@ -823,7 +840,10 @@ static void advect_setup(advect_t* adv)
   adv->U = str_grid_cell_data_new(adv->grid, num_comps, num_ghost_layers);
 
   // Create work "vectors."
-  adv->F_work = str_grid_face_data_new(adv->grid, 1);
+  adv->F = str_grid_face_data_new(adv->grid, 1);
+  adv->UL = str_grid_cell_data_new(adv->grid, 3, 1);
+  adv->UH = str_grid_cell_data_new(adv->grid, 3, 1);
+  adv->V = str_grid_face_data_new(adv->grid, 1);
 
   // Create the ARK integrator.
   adv->integ = explicit_ark_str_ode_integrator_new(2,
@@ -912,7 +932,7 @@ static void advect_plot(void* context, const char* prefix, const char* directory
           for (int k = patch->k1; k < patch->k2; ++k)
           {
             x.z = bbox.z1 + (k + 0.5) * adv->dz;
-            st_func_eval(adv->V, &x, t, &V[i][j][k][0]);
+            st_func_eval(adv->V_func, &x, t, &V[i][j][k][0]);
           }
         }
       }
@@ -972,9 +992,12 @@ static model_t* advect_ctor()
   adv->grid = NULL;
   adv->mapping = NULL;
   adv->U0 = NULL;
+  adv->V_func = NULL;
   adv->V = NULL;
   adv->U = NULL;
-  adv->F_work = NULL;
+  adv->UL = NULL;
+  adv->UH = NULL;
+  adv->F = NULL;
   adv->integ = NULL;
   model_vtable vtable = {.read_input = advect_read_input,
                          .init = advect_init,

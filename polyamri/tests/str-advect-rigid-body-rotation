@@ -13,8 +13,8 @@ omega = {0, 0, 1}
 velocity = rigid_body_rotation{origin = x0, angular_velocity = omega}
 
 -- Structured grid.
-grid = structured_grid{num_cells = {64, 64, 64},
-                       patch_size = {64, 64, 64}}
+grid = structured_grid{num_cells = {128, 128, 128},
+                       patch_size = {128, 128, 128}}
 --                       patch_size = {32, 32, 32}}
 
 -- Computational domain is [0,1] x [0,1] x [0,1].
