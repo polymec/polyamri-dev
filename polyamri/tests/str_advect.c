@@ -926,6 +926,7 @@ static void advect_plot(void* context, const char* prefix, const char* directory
     int pos = 0, ip, jp, kp;
     str_grid_patch_t* patch;
     bbox_t bbox;
+    #pragma omp parallel firstprivate(pos) private(ip, jp, kp, patch, bbox)
     while (str_grid_cell_data_next_patch(velocity, &pos, &ip, &jp, &kp, &patch, &bbox))
     {
       DECLARE_STR_GRID_PATCH_ARRAY(V, patch);
