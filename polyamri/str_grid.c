@@ -5,14 +5,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#if POLYMEC_HAVE_OPENMP
-#include <omp.h>
-#endif
 #include "core/array.h"
 #include "core/unordered_set.h"
 #include "core/unordered_map.h"
 #include "polyamri/str_grid.h"
 #include "polyamri/str_grid_patch_filler.h"
+
+#if POLYMEC_HAVE_OPENMP
+#include <omp.h>
+#endif
 
 struct str_grid_t
 {
