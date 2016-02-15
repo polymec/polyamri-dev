@@ -909,11 +909,6 @@ static void advect_plot(void* context, const char* prefix, const char* directory
   silo_file_write_str_grid(silo, "grid", adv->grid, adv->mapping);
   const char* U_name[] = {"U"};
   silo_file_write_str_grid_cell_data(silo, U_name, "grid", adv->U, NULL, adv->mapping);
-extrapolate_U_to_faces(adv, t, adv->U, adv->UL, adv->UH, adv->V);
-const char* UL_names[] = {"ULx", "ULy", "ULz"};
-silo_file_write_str_grid_cell_data(silo, UL_names, "grid", adv->UL, NULL, adv->mapping);
-const char* UH_names[] = {"UHx", "UHy", "UHz"};
-silo_file_write_str_grid_cell_data(silo, UH_names, "grid", adv->UH, NULL, adv->mapping);
 
   // Compute and plot the velocity field.
   {
