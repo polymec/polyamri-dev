@@ -5,6 +5,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#if POLYMEC_HAVE_OPENMP
+#include <omp.h>
+#endif
 #include "core/array.h"
 #include "core/unordered_set.h"
 #include "core/unordered_map.h"
@@ -137,6 +140,15 @@ bool str_grid_next_patch(str_grid_t* grid, int* pos, int* i, int* j, int* k)
 {
   ASSERT(grid->finalized);
   ASSERT(*pos >= 0);
+#if POLYMEC_HAVE_OPENMP
+  int num_threads = omp_get_num_threads();
+  int tid = omp_get_thread_num();
+#else
+  int num_threads = 1;
+  int tid = 0;
+#endif
+  if (*pos == 0) 
+    *pos = tid;
   bool result = (*pos < grid->patches->size);
   if (result)
   {
@@ -144,7 +156,7 @@ bool str_grid_next_patch(str_grid_t* grid, int* pos, int* i, int* j, int* k)
     *i = grid->patch_indices[3*l];
     *j = grid->patch_indices[3*l+1];
     *k = grid->patch_indices[3*l+2];
-    ++(*pos);
+    *pos += num_threads;
   }
   return result;
 }
