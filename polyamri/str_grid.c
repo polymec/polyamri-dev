@@ -34,6 +34,9 @@ struct str_grid_t
   // A mapping from a grid's ghost fill tokens to lists of tokens for the 
   // underlying patch fill operations.
   int_ptr_unordered_map_t* tokens;
+
+  // Properties stored in this grid.
+  string_ptr_unordered_map_t* properties;
 };
 
 str_grid_t* str_grid_new(int nx, int ny, int nz, 
@@ -64,6 +67,7 @@ str_grid_t* str_grid_new(int nx, int ny, int nz,
   grid->patch_fillers = int_ptr_unordered_map_new();
   grid->finalized = false;
   grid->tokens = int_ptr_unordered_map_new();
+  grid->properties = string_ptr_unordered_map_new();
   return grid;
 }
 
@@ -81,6 +85,7 @@ static inline void get_patch_indices(str_grid_t* grid, int index, int* i, int* j
 
 void str_grid_free(str_grid_t* grid)
 {
+  string_ptr_unordered_map_free(grid->properties);
   int_ptr_unordered_map_free(grid->tokens);
   int_ptr_unordered_map_free(grid->patch_fillers);
   int_unordered_set_free(grid->patches);
@@ -193,6 +198,77 @@ bool str_grid_has_patch(str_grid_t* grid, int i, int j, int k)
 {
   int index = patch_index(grid, i, j, k);
   return int_unordered_set_contains(grid->patches, index);
+}
+
+// Properties stashed on the grid.
+typedef struct
+{
+  void* data;
+  serializer_t* serializer;
+} prop_t;
+
+static prop_t* prop_new(void* data, serializer_t* ser)
+{
+  prop_t* prop = polymec_malloc(sizeof(prop_t));
+  prop->data = data;
+  prop->serializer = ser;
+  return prop;
+}
+
+static void prop_dtor(void* context)
+{
+  prop_t* prop = context;
+  if (prop->serializer != NULL)
+    serializer_destroy_object(prop->serializer, prop->data);
+  prop->data = NULL;
+  prop->serializer = NULL;
+  polymec_free(prop);
+}
+
+void str_grid_set_property(str_grid_t* grid, 
+                           const char* property, 
+                           void* data, 
+                           serializer_t* serializer)
+{
+  prop_t* prop = prop_new(data, serializer);
+  string_ptr_unordered_map_insert_with_kv_dtors(grid->properties, 
+                                                string_dup(property),
+                                                prop,
+                                                string_free,
+                                                prop_dtor);
+}
+
+void* str_grid_property(str_grid_t* grid, const char* property)
+{
+  void** prop_p = string_ptr_unordered_map_get(grid->properties, (char*)property);
+  if (prop_p != NULL)
+  {
+    prop_t* prop = *((prop_t**)prop_p);
+    return prop->data;
+  }
+  else
+    return NULL;
+}
+
+void str_grid_delete_property(str_grid_t* grid, const char* property)
+{
+  string_ptr_unordered_map_delete(grid->properties, (char*)property);
+}
+
+bool str_grid_next_property(str_grid_t* grid, int* pos, 
+                            char** prop_name, void** prop_data, 
+                            serializer_t** prop_serializer)
+{
+  void* val;
+  bool result = string_ptr_unordered_map_next(grid->properties, pos,
+                                              prop_name, &val);
+  if (result)
+  {
+    prop_t* prop = val;
+    *prop_data = prop->data;
+    *prop_serializer = prop->serializer;
+  }
+  return result;
 }
 
 int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* data)
