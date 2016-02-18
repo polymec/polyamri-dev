@@ -10,7 +10,7 @@
 #include <setjmp.h>
 #include <string.h>
 #include "cmocka.h"
-#include "polyamri/silo_file_str_methods.h"
+#include "polyamri/silo_file.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
 
 void test_write_str_grid_patch(void** state) 

@@ -7,7 +7,7 @@
 
 #include "silo.h"
 #include "core/silo_file.h"
-#include "polyamri/silo_file_str_methods.h"
+#include "polyamri/silo_file.h"
 
 #if POLYMEC_HAVE_DOUBLE_PRECISION
 #define SILO_FLOAT_TYPE DB_DOUBLE
