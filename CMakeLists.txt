@@ -22,6 +22,7 @@ message("-- Found polymec library in ${POLYMEC_PREFIX} (v${POLYMEC_VERSION})")
 
 # Build everything the way Polymec does.
 set(BUILD_SHARED_LIBS ${POLYMEC_BUILD_SHARED_LIBS})
+set(CMAKE_MACOSX_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH "${POLYMEC_PREFIX}/lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
