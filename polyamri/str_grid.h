@@ -8,6 +8,7 @@
 #ifndef POLYAMRI_STR_GRID_H
 #define POLYAMRI_STR_GRID_H
 
+#include "core/serializer.h"
 #include "polyamri/str_grid_patch.h"
 
 // This type is used to fill ghost cells in patches.
@@ -92,6 +93,31 @@ bool str_grid_has_patch(str_grid_t* grid, int i, int j, int k);
 // Queries the periodicity of the grid, placing booleans for the 
 // x, y, and z periodicity into the given (3-wide) periodicity array.
 void str_grid_get_periodicity(str_grid_t* grid, bool* periodicity);
+
+// Associates a named piece of metadata (a "property") with the grid itself.
+// This can be used to store information about (for example) how the grid 
+// was generated, which can sometimes be useful. A serializer can 
+// be given so that any partitioning or repartitioning of the grid can 
+// preserve this property on subdomains. If the given property exists on the 
+// grid, it is overwritten.
+void str_grid_set_property(str_grid_t* grid, 
+                           const char* property, 
+                           void* data, 
+                           serializer_t* serializer);
+
+// Retrieves the given property from the grid, if any. If the 
+// property is not found, this returns NULL.
+void* str_grid_property(str_grid_t* grid, const char* property);
+
+// Deletes the given property from the grid. This has no effect if the 
+// property is not found.
+void str_grid_delete_property(str_grid_t* grid, const char* property);
+
+// Allows the traversal of grid properties. Set *pos to 0 to reset the 
+// iteration.
+bool str_grid_next_property(str_grid_t* grid, int* pos, 
+                            char** prop_name, void** prop_data, 
+                            serializer_t** prop_serializer);
 
 //------------------------------------------------------------------------
 //                          Service methods

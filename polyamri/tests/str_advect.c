@@ -14,7 +14,7 @@
 #include "polyamri/ark_str_ode_integrator.h"
 #include "polyamri/interpreter_register_polyamri_functions.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
-#include "polyamri/silo_file_str_methods.h"
+#include "polyamri/silo_file.h"
 #include "model/model.h"
 
 // Fortran-style SIGN function

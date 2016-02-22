@@ -5,8 +5,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef POLYAMRI_STR_SILO_FILE_H
-#define POLYAMRI_STR_SILO_FILE_H
+#ifndef POLYAMRI_SILO_FILE_H
+#define POLYAMRI_SILO_FILE_H
 
 #include "core/silo_file.h"
 #include "geometry/coord_mapping.h"
