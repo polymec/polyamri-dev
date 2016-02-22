@@ -6,6 +6,9 @@ add_library(polyamri polyamri.c
             grid_to_bbox_coord_mapping.c
             silo_file.c
             interpreter_register_polyamri_functions.c)
+if (BUILD_SHARED_LIBS)
+  target_link_libraries(polyamri ${POLYMEC_LIBRARIES})
+endif()
 
 set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES} PARENT_SCOPE)
 set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES})
