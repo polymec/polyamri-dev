@@ -1,14 +1,13 @@
+include(add_polymec_library)
+
 # Library.
-add_library(polyamri polyamri.c 
-            str_grid_patch.c str_grid_patch_filler.c str_grid.c str_grid_assembly.c
-            str_grid_cell_data.c str_grid_face_data.c str_grid_edge_data.c str_grid_node_data.c
-            str_ode_integrator.c ark_str_ode_integrator.c
-            grid_to_bbox_coord_mapping.c
-            silo_file.c
-            interpreter_register_polyamri_functions.c)
-if (BUILD_SHARED_LIBS)
-  target_link_libraries(polyamri ${POLYMEC_LIBRARIES})
-endif()
+add_polymec_library(polyamri polyamri.c 
+                    str_grid_patch.c str_grid_patch_filler.c str_grid.c str_grid_assembly.c
+                    str_grid_cell_data.c str_grid_face_data.c str_grid_edge_data.c str_grid_node_data.c
+                    str_ode_integrator.c ark_str_ode_integrator.c
+                    grid_to_bbox_coord_mapping.c
+                    silo_file.c
+                    interpreter_register_polyamri_functions.c)
 
 set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES} PARENT_SCOPE)
 set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES})

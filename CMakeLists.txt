@@ -33,9 +33,6 @@ add_custom_target(update_version_h ALL
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
 
-# Look for libraries in these directories.
-link_directories("${POLYMEC_PREFIX}/lib")
-
 enable_testing()
 
 add_subdirectory(polyamri)
