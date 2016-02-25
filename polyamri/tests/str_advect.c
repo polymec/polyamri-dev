@@ -903,16 +903,17 @@ static void advect_init(void* context, real_t t)
   while (str_grid_cell_data_next_patch(adv->U, &pos, &ip, &jp, &kp, &patch, &bbox))
   {
     DECLARE_STR_GRID_PATCH_ARRAY(U, patch);
-    point_t x;
+    point_t x, x1;
     for (int i = patch->i1; i < patch->i2; ++i)
     {
-      x.x = bbox.x1 + (i + 0.5) * adv->dx;
+      x1.x = bbox.x1 + (i + 0.5) * adv->dx;
       for (int j = patch->j1; j < patch->j2; ++j)
       {
-        x.y = bbox.y1 + (j + 0.5) * adv->dy;
+        x1.y = bbox.y1 + (j + 0.5) * adv->dy;
         for (int k = patch->k1; k < patch->k2; ++k)
         {
-          x.z = bbox.z1 + (k + 0.5) * adv->dz;
+          x1.z = bbox.z1 + (k + 0.5) * adv->dz;
+          coord_mapping_map_point(adv->mapping, &x1, &x);
           st_func_eval(adv->U0, &x, t, &U[i][j][k][0]);
         }
       }
