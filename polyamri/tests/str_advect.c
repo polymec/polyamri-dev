@@ -174,6 +174,7 @@ typedef struct
   // Grid and computational domain.
   str_grid_t* grid;
   coord_mapping_t* mapping;
+  coord_mapping_t* inv_mapping;
   real_t dx, dy, dz;
 
   // State information.
@@ -226,6 +227,11 @@ static void advect_read_input(void* context,
     else
       polymec_error("domain must be a bounding box or a coordinate mapping.");
   }
+  
+  // Make sure the mapping is invertible.
+  adv->inv_mapping = coord_mapping_inverse(adv->mapping);
+  if (adv->inv_mapping == NULL)
+    polymec_error("domain mapping is not invertible! Must be an invertible mapping.");
 }
 
 static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
@@ -244,21 +250,23 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
     #pragma omp parallel firstprivate(pos) private(ip, jp, kp, patch, bbox)
     while (str_grid_cell_data_next_patch(U, &pos, &ip, &jp, &kp, &patch, &bbox))
     {
-      point_t x;
-      vector_t v;
+      point_t x, x1;
+      vector_t v, v1;
 
       // x face velocities.
       for (int i = patch->i1; i <= patch->i2; ++i)
       {
-        x.x = bbox.x1 + i * adv->dx;
+        x1.x = bbox.x1 + i * adv->dx;
         for (int j = patch->j1; j < patch->j2; ++j)
         {
-          x.y = bbox.y1 + (j + 0.5) * adv->dy;
+          x1.y = bbox.y1 + (j + 0.5) * adv->dy;
           for (int k = patch->k1; k < patch->k2; ++k)
           {
-            x.z = bbox.z1 + (k + 0.5) * adv->dz;
+            x1.z = bbox.z1 + (k + 0.5) * adv->dz;
+            coord_mapping_map_point(adv->mapping, &x1, &x);
             st_func_eval(adv->V_func, &x, t, (real_t*)&v);
-            adv->V_max = MAX(adv->V_max, vector_mag(&v));
+            coord_mapping_map_vector(adv->inv_mapping, &x, &v, &v1);
+            adv->V_max = MAX(adv->V_max, vector_mag(&v1));
           }
         }
       }
@@ -266,15 +274,17 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
       // y face velocities.
       for (int i = patch->i1; i < patch->i2; ++i)
       {
-        x.x = bbox.x1 + (i + 0.5) * adv->dx;
+        x1.x = bbox.x1 + (i + 0.5) * adv->dx;
         for (int j = patch->j1; j <= patch->j2; ++j)
         {
-          x.y = bbox.y1 + j * adv->dy;
+          x1.y = bbox.y1 + j * adv->dy;
           for (int k = patch->k1; k < patch->k2; ++k)
           {
-            x.z = bbox.z1 + (k + 0.5) * adv->dz;
+            x1.z = bbox.z1 + (k + 0.5) * adv->dz;
+            coord_mapping_map_point(adv->mapping, &x1, &x);
             st_func_eval(adv->V_func, &x, t, (real_t*)&v);
-            adv->V_max = MAX(adv->V_max, vector_mag(&v));
+            coord_mapping_map_vector(adv->inv_mapping, &x, &v, &v1);
+            adv->V_max = MAX(adv->V_max, vector_mag(&v1));
           }
         }
       }
@@ -282,15 +292,17 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
       // z face velocities.
       for (int i = patch->i1; i < patch->i2; ++i)
       {
-        x.x = bbox.x1 + (i + 0.5) * adv->dx;
+        x1.x = bbox.x1 + (i + 0.5) * adv->dx;
         for (int j = patch->j1; j < patch->j2; ++j)
         {
-          x.y = bbox.y1 + (j + 0.5) * adv->dy;
+          x1.y = bbox.y1 + (j + 0.5) * adv->dy;
           for (int k = patch->k1; k <= patch->k2; ++k)
           {
-            x.z = bbox.z1 + k * adv->dz;
+            x1.z = bbox.z1 + k * adv->dz;
+            coord_mapping_map_point(adv->mapping, &x1, &x);
             st_func_eval(adv->V_func, &x, t, (real_t*)&v);
-            adv->V_max = MAX(adv->V_max, vector_mag(&v));
+            coord_mapping_map_vector(adv->inv_mapping, &x, &v, &v1);
+            adv->V_max = MAX(adv->V_max, vector_mag(&v1));
           }
         }
       }
@@ -357,25 +369,29 @@ static void extrapolate_U_to_faces(advect_t* adv,
     DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Vx, V_patch);
 
-    point_t x_low, x_high;
+    point_t x_low, x1_low, x_high, x1_high;
     for (int i = V_patch->i1; i < V_patch->i2-1; ++i) 
     {
-      x_low.x = bbox.x1 + i * dx;
-      x_high.x = x_low.x + dx;
+      x1_low.x = bbox.x1 + i * dx;
+      x1_high.x = x1_low.x + dx;
       for (int j = V_patch->j1; j < V_patch->j2; ++j)
       {
-        x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
+        x1_low.y = x1_high.y = bbox.y1 + (j+0.5) * dy;
         for (int k = V_patch->k1; k < V_patch->k2; ++k)
         {
-          x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
+          x1_low.z = x1_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces, recording 
           // the velocities.
-          vector_t v_low, v_high;
+          vector_t v_low, v1_low, v_high, v1_high;
+          coord_mapping_map_point(adv->mapping, &x1_low, &x_low);
           st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
+          coord_mapping_map_vector(adv->inv_mapping, &x_low, &v_low, &v1_low);
+          coord_mapping_map_point(adv->mapping, &x1_high, &x_high);
           st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
-          Vx[i][j][k][0] = v_low.x;
-          Vx[i+1][j][k][0] = v_high.x;
+          coord_mapping_map_vector(adv->inv_mapping, &x_high, &v_high, &v1_high);
+          Vx[i][j][k][0] = v1_low.x;
+          Vx[i+1][j][k][0] = v1_high.x;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
@@ -433,25 +449,29 @@ static void extrapolate_U_to_faces(advect_t* adv,
     DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Vy, V_patch);
 
-    point_t x_low, x_high;
+    point_t x_low, x1_low, x_high, x1_high;
     for (int i = V_patch->i1; i < V_patch->i2; ++i) 
     {
-      x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
+      x1_low.x = x1_high.x = bbox.x1 + (i+0.5) * dx;
       for (int j = V_patch->j1; j < V_patch->j2-1; ++j)
       {
-        x_low.y = bbox.y1 + j * dy;
-        x_high.y = x_low.y + dy;
+        x1_low.y = bbox.y1 + j * dy;
+        x1_high.y = x1_low.y + dy;
         for (int k = V_patch->k1; k < V_patch->k2; ++k)
         {
-          x_low.z = x_high.z = bbox.z1 + (k+0.5) * dz;
+          x1_low.z = x1_high.z = bbox.z1 + (k+0.5) * dz;
 
           // Get the velocity at the low and high faces, recording 
           // the y-velocities.
-          vector_t v_low, v_high;
+          vector_t v_low, v1_low, v_high, v1_high;
+          coord_mapping_map_point(adv->mapping, &x1_low, &x_low);
           st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
+          coord_mapping_map_vector(adv->inv_mapping, &x_low, &v_low, &v1_low);
+          coord_mapping_map_point(adv->mapping, &x1_high, &x_high);
           st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
-          Vy[i][j][k][0] = v_low.y;
-          Vy[i][j+1][k][0] = v_high.y;
+          coord_mapping_map_vector(adv->inv_mapping, &x_high, &v_high, &v1_high);
+          Vy[i][j][k][0] = v1_low.y;
+          Vy[i][j+1][k][0] = v1_high.y;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
@@ -509,25 +529,29 @@ static void extrapolate_U_to_faces(advect_t* adv,
     DECLARE_STR_GRID_PATCH_ARRAY(UH, UH_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Vz, V_patch);
 
-    point_t x_low, x_high;
+    point_t x_low, x1_low, x_high, x1_high;
     for (int i = V_patch->i1; i < V_patch->i2; ++i) 
     {
-      x_low.x = x_high.x = bbox.x1 + (i+0.5) * dx;
+      x1_low.x = x1_high.x = bbox.x1 + (i+0.5) * dx;
       for (int j = V_patch->j1; j < V_patch->j2; ++j)
       {
-        x_low.y = x_high.y = bbox.y1 + (j+0.5) * dy;
+        x1_low.y = x1_high.y = bbox.y1 + (j+0.5) * dy;
         for (int k = V_patch->k1; k < V_patch->k2-1; ++k)
         {
-          x_low.z = bbox.z1 + k * dz;
-          x_high.z = x_low.z + dz;
+          x1_low.z = bbox.z1 + k * dz;
+          x1_high.z = x1_low.z + dz;
 
           // Get the velocity at the low and high faces, recording 
           // the x-velocities.
-          vector_t v_low, v_high;
+          vector_t v_low, v1_low, v_high, v1_high;
+          coord_mapping_map_point(adv->mapping, &x1_low, &x_low);
           st_func_eval(adv->V_func, &x_low, t, (real_t*)&v_low);
+          coord_mapping_map_vector(adv->inv_mapping, &x_low, &v_low, &v1_low);
+          coord_mapping_map_point(adv->mapping, &x1_high, &x_high);
           st_func_eval(adv->V_func, &x_high, t, (real_t*)&v_high);
-          Vz[i][j][k][0] = v_low.z;
-          Vz[i][j][k+1][0] = v_high.z;
+          coord_mapping_map_vector(adv->inv_mapping, &x_high, &v_high, &v1_high);
+          Vz[i][j][k][0] = v1_low.z;
+          Vz[i][j][k+1][0] = v1_high.z;
 
           // Note that since i, j, k are face indices, we need to 
           // translate them to cell indices.
@@ -930,16 +954,17 @@ static void advect_plot(void* context, const char* prefix, const char* directory
     while (str_grid_cell_data_next_patch(velocity, &pos, &ip, &jp, &kp, &patch, &bbox))
     {
       DECLARE_STR_GRID_PATCH_ARRAY(V, patch);
-      point_t x;
+      point_t x1, x;
       for (int i = patch->i1; i < patch->i2; ++i)
       {
-        x.x = bbox.x1 + (i + 0.5) * adv->dx;
+        x1.x = bbox.x1 + (i + 0.5) * adv->dx;
         for (int j = patch->j1; j < patch->j2; ++j)
         {
-          x.y = bbox.y1 + (j + 0.5) * adv->dy;
+          x1.y = bbox.y1 + (j + 0.5) * adv->dy;
           for (int k = patch->k1; k < patch->k2; ++k)
           {
-            x.z = bbox.z1 + (k + 0.5) * adv->dz;
+            x1.z = bbox.z1 + (k + 0.5) * adv->dz;
+            coord_mapping_map_point(adv->mapping, &x1, &x);
             st_func_eval(adv->V_func, &x, t, &V[i][j][k][0]);
           }
         }
@@ -999,6 +1024,7 @@ static model_t* advect_ctor()
   advect_t* adv = polymec_malloc(sizeof(advect_t));
   adv->grid = NULL;
   adv->mapping = NULL;
+  adv->inv_mapping = NULL;
   adv->U0 = NULL;
   adv->V_func = NULL;
   adv->V = NULL;
