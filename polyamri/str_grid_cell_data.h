@@ -69,16 +69,6 @@ bool str_grid_cell_data_next_patch(str_grid_cell_data_t* cell_data, int* pos,
                                    str_grid_patch_t** patch,
                                    bbox_t* bbox);
 
-// Fills all ghost values in the str_grid_cell_data's patches.
-void str_grid_cell_data_fill_ghosts(str_grid_cell_data_t* cell_data);
-
-// Begins an asynchronous ghost-filling operation.
-void str_grid_cell_data_start_filling_ghosts(str_grid_cell_data_t* cell_data);
-
-// Concludes an asynchronous ghost-filling operation initiated by 
-// a call to str_grid_cell_data_start_filling_ghosts().
-void str_grid_cell_data_finish_filling_ghosts(str_grid_cell_data_t* cell_data);
-
 // Returns the pointer to the underlying patch data buffer.
 void* str_grid_cell_data_buffer(str_grid_cell_data_t* cell_data);
 

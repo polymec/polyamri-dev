@@ -5,7 +5,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "polyamri/str_grid.h"
+#include "polyamri/str_grid_factory.h"
 #include "model/interpreter.h"
 
 // Lua stuff.
@@ -106,21 +106,13 @@ static int structured_grid(lua_State* lua)
     lua_pop(lua, 1); // removes 'regions' argument from stack.
   }
   
-  // Create the structured grid.
+  // Create the structured grid using a grid factory.
   int nx = num_cells[0]/patch_size[0];
   int ny = num_cells[1]/patch_size[1];
   int nz = num_cells[2]/patch_size[2];
-  str_grid_t* grid = str_grid_new(nx, ny, nz, patch_size[0], patch_size[1], patch_size[2], false, false, false);
-
-  // Fill it with patches.
-  // Ghost cells are filled with local copies.
-  for (int ip = 0; ip < nx; ++ip)
-    for (int jp = 0; jp < ny; ++jp)
-      for (int kp = 0; kp < nz; ++kp)
-        str_grid_insert_patch(grid, ip, jp, kp);
-
-  // Finalize the grid.
-  str_grid_finalize(grid);
+  str_grid_factory_t* factory = str_grid_factory_new(MPI_COMM_WORLD, patch_size[0], patch_size[1], patch_size[2]);
+  str_grid_t* grid = str_grid_factory_brick(factory, nx, ny, nz, NULL);
+  factory = NULL;
 
   // Adorn the grid with our regions table if we have it.
   if (regions != NULL)

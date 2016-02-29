@@ -12,6 +12,10 @@ message("-- Building polyamri (v${POLYAMRI_VERSION})")
 # Use our own CMake stuff.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
+# Look for headers in the top directory first.
+include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_BINARY_DIR})
+
 # Look for Polymec and use its CMake settings.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLYMEC_PREFIX}/share/polymec/")
 include(polymec)
@@ -28,10 +32,6 @@ set(CMAKE_INSTALL_RPATH "${POLYMEC_PREFIX}/lib")
 # Generate polyamri_version.h with the right version numbers.
 add_custom_target(update_version_h ALL
                   python ${POLYMEC_PREFIX}/share/polymec/update_version_h.py polyamri ${POLYAMRI_VERSION} ${PROJECT_BINARY_DIR}/polyamri/polyamri_version.h)
-
-# Look for headers in the top directory.
-include_directories(${PROJECT_SOURCE_DIR})
-include_directories(${PROJECT_BINARY_DIR})
 
 enable_testing()
 

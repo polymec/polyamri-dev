@@ -8,7 +8,7 @@
 #include "polyamri/polyamri.h"
 #include "core/string_utils.h"
 #include "polyamri/str_grid.h"
-#include "polyamri/str_grid_patch_filler.h"
+#include "polyamri/str_grid_cell_filler_factory.h"
 #include "polyamri/str_grid_cell_data.h"
 #include "polyamri/str_grid_face_data.h"
 #include "polyamri/ark_str_ode_integrator.h"
@@ -177,6 +177,9 @@ typedef struct
   coord_mapping_t* inv_mapping;
   real_t dx, dy, dz;
 
+  // Ghost filler.
+  str_grid_cell_filler_t* ghost_filler;
+
   // State information.
   str_grid_cell_data_t* U;
 
@@ -339,6 +342,8 @@ static void advect_clear(advect_t* adv)
     str_grid_face_data_free(adv->F);
   if (adv->V != NULL)
     str_grid_face_data_free(adv->V);
+  if (adv->ghost_filler != NULL)
+    str_grid_cell_filler_free(adv->ghost_filler);
 }
 
 static void extrapolate_U_to_faces(advect_t* adv,
@@ -712,14 +717,14 @@ static int advect_rhs(void* context,
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
 
   // Make sure ghost cells are filled.
-  str_grid_cell_data_fill_ghosts(U);
+  str_grid_cell_filler_fill(adv->ghost_filler, U);
 
   // Extrapolate U to faces and compute face velocities.
   extrapolate_U_to_faces(adv, t, U, adv->UL, adv->UH, adv->V);
 
   // Fill ghost cells for UL and UH, the extrapolated values of U.
-  str_grid_cell_data_fill_ghosts(adv->UL);
-  str_grid_cell_data_fill_ghosts(adv->UH);
+  str_grid_cell_filler_fill(adv->ghost_filler, adv->UL);
+  str_grid_cell_filler_fill(adv->ghost_filler, adv->UH);
 
   // Compute fluxes.
   compute_fluxes(adv, t, adv->UL, adv->UH, adv->V, adv->F);
@@ -805,14 +810,6 @@ static void advect_setup(advect_t* adv)
   options_t* options = options_argv();
   override_algorithm_options(options, &adv->limit_delta);
 
-  // Here we set up the machinery to fill ghost cells in the grid.
-  str_grid_patch_filler_t* fill_from_east = copy_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY, STR_GRID_PATCH_X2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_west = copy_str_grid_patch_filler_new(STR_GRID_PATCH_X2_BOUNDARY, STR_GRID_PATCH_X1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_south = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Y2_BOUNDARY, STR_GRID_PATCH_Y1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_north = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Y1_BOUNDARY, STR_GRID_PATCH_Y2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_above = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY, STR_GRID_PATCH_Z2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_below = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY, STR_GRID_PATCH_Z1_BOUNDARY);
-
   // We impose a zero flux on all boundaries, on the assumption that the 
   // solution is zero at the boundary.
   str_grid_patch_filler_t* zero_flux_x1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY);
@@ -822,39 +819,16 @@ static void advect_setup(advect_t* adv)
   str_grid_patch_filler_t* zero_flux_z1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY);
   str_grid_patch_filler_t* zero_flux_z2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY);
 
-  int npx, npy, npz;
-  str_grid_get_extents(adv->grid, &npx, &npy, &npz);
-
-  int pos = 0, ip, jp, kp;
-  while (str_grid_next_patch(adv->grid, &pos, &ip, &jp, &kp))
-  {
-    if (ip > 0)
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_west);
-    else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_flux_x1);
-    if (ip < npx-1)
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_east);
-    else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_flux_x2);
-    if (jp > 0)
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_south);
-    else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_flux_y1);
-    if (jp < npy-1)
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_north);
-    else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_flux_y2);
-    if (kp > 0)
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_below);
-    else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_flux_z1);
-    if (kp < npz-1)
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, fill_from_above);
-    else
-      str_grid_append_patch_filler(adv->grid, ip, jp, kp, zero_flux_z2);
-  }
+  str_grid_cell_filler_factory_t* factory = str_grid_cell_filler_factory_new(MPI_COMM_WORLD);
+  adv->ghost_filler = str_grid_cell_filler_factory_ghost_filler(factory, adv->grid, 
+                                                                zero_flux_x1, zero_flux_x2,
+                                                                zero_flux_y1, zero_flux_y2,
+                                                                zero_flux_z1, zero_flux_z2);
+  factory = NULL;
 
   // Set the grid spacings.
+  int npx, npy, npz;
+  str_grid_get_extents(adv->grid, &npx, &npy, &npz);
   int nx, ny, nz;
   str_grid_get_patch_size(adv->grid, &nx, &ny, &nz);
   int Nx = npx * nx;
@@ -1033,6 +1007,7 @@ static model_t* advect_ctor()
   adv->UL = NULL;
   adv->UH = NULL;
   adv->F = NULL;
+  adv->ghost_filler = NULL;
   adv->integ = NULL;
   model_vtable vtable = {.read_input = advect_read_input,
                          .init = advect_init,
