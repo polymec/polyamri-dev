@@ -5,8 +5,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "polyamri/str_grid_factory.h"
 #include "model/interpreter.h"
+#include "polyamri/str_grid_factory.h"
+#include "polyamri/grid_to_bbox_coord_mapping.h"
 
 // Lua stuff.
 #include "lua.h"
@@ -16,13 +17,16 @@
 static const char* structured_grid_usage = 
   "grid = structured_grid{num_cells = {nx, ny, nz},\n"
   "                       patch_size = {px, py, pz},\n"
+  "                       domain = D,\n"
   "                       regions = {name1 = indicator1,\n"
   "                                  name2 = indicator2,\n"
   "                                  ...\n"
   "                                  nameN = indicatorN}}\n"
   "  Creates a structured grid spanning the given domain with the given\n"
   "  numbers of cells in the x, y, z directions, comprising patches of the\n"
-  "  given dimensions (in cells). Optionally, regions may be specified by\n"
+  "  given dimensions (in cells). Optionally, mapping may be a bounding box\n"
+  "  or a coordinate mapping object that maps the logical regin [0,1]x[0,1]x[0,1]\n"
+  "  to a physical region. Additionally, regions may be specified by\n"
   "  a table mapping region names to indicator functions. An indicator\n"
   "  function I(x, y, z, t) for a region R maps a cell C to the value 1 if\n"
   "  the centroid of C falls within R and 0 otherwise.\n";
@@ -72,6 +76,23 @@ static int structured_grid(lua_State* lua)
     }           
   }
 
+  // Parse domain if such an argument is found.
+  coord_mapping_t* mapping = NULL;
+  lua_pushstring(lua, "mapping"); // pushes key onto stack
+  lua_gettable(lua, 1); // replaces key with value
+  if (!lua_isnil(lua, -1))
+  {
+    mapping = lua_tocoordmapping(lua, -1);
+    if (mapping == NULL)
+    {
+      bbox_t* bbox = lua_toboundingbox(lua, -1);
+      if (bbox == NULL)
+        luaL_error(lua, "structured_grid: mapping must be a coordinate mapping or a bounding box.");
+      else
+        mapping = grid_to_bbox_coord_mapping_new(bbox);
+    }
+  }
+
   // Parse regions if such an argument is found.
   string_ptr_unordered_map_t* regions = NULL;
   lua_pushstring(lua, "regions"); // pushes key onto stack
@@ -113,6 +134,10 @@ static int structured_grid(lua_State* lua)
   str_grid_factory_t* factory = str_grid_factory_new(MPI_COMM_WORLD, patch_size[0], patch_size[1], patch_size[2]);
   str_grid_t* grid = str_grid_factory_brick(factory, nx, ny, nz, NULL);
   factory = NULL;
+
+  // Stash the mapping into a property in the grid if we have it.
+  if (mapping != NULL)
+    str_grid_set_property(grid, "mapping", mapping, NULL);
 
   // Adorn the grid with our regions table if we have it.
   if (regions != NULL)

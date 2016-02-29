@@ -217,18 +217,13 @@ static void advect_read_input(void* context,
   adv->V_func = interpreter_get_vector_function(interp, "velocity");
   adv->grid = interpreter_get_str_grid(interp, "grid");
 
-  // Computational domain can either be a bounding box or a coordinate 
-  // mapping.
-  bbox_t* bbox = interpreter_get_bbox(interp, "domain");
-  if (bbox != NULL)
-    adv->mapping = grid_to_bbox_coord_mapping_new(bbox);
-  else
+  // Peel the computational domain off the grid.
+  adv->mapping = str_grid_property(adv->grid, "mapping");
+  if (adv->mapping == NULL)
   {
-    coord_mapping_t* mapping = interpreter_get_coord_mapping(interp, "domain");
-    if (mapping != NULL)
-      adv->mapping = mapping;
-    else
-      polymec_error("domain must be a bounding box or a coordinate mapping.");
+    // We use an "unmapped" domain.
+    bbox_t bbox = {.x1 = 0.0, .x2 = 1.0, .y1 = 0.0, .y2 = 1.0, .z1 = 0.0, .z2 = 1.0};
+    adv->mapping = grid_to_bbox_coord_mapping_new(&bbox);
   }
   
   // Make sure the mapping is invertible.
