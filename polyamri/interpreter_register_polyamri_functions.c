@@ -14,6 +14,9 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
+// Type code for structured grids.
+static int structured_grid_type_code = -1;
+
 static const char* structured_grid_usage = 
   "grid = structured_grid{num_cells = {nx, ny, nz},\n"
   "                       patch_size = {px, py, pz},\n"
@@ -143,20 +146,19 @@ static int structured_grid(lua_State* lua)
   if (regions != NULL)
     str_grid_set_property(grid, "regions", regions, NULL);
 
-  lua_pushuserdefined(lua, grid, DTOR(str_grid_free));
+  lua_pushuserdefined(lua, grid, structured_grid_type_code, DTOR(str_grid_free));
   return 1;
 }
 
 void interpreter_register_polyamri_functions(interpreter_t* interp)
 {
+  structured_grid_type_code = interpreter_new_user_defined_type_code(interp);
   interpreter_register_function(interp, "structured_grid", structured_grid, 
     docstring_from_string(structured_grid_usage));
 }
 
 str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name)
 {
-  // For now, we simply store structured grids as user-defined objects.
-  // Not "watertight," but we'll cross the validation bridge when we come to it.
-  return interpreter_get_user_defined(interp, name);
+  return interpreter_get_user_defined(interp, name, structured_grid_type_code);
 }
 
