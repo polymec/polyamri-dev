@@ -30,79 +30,6 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
-static const char* rigid_body_rotation_usage = 
-  "V = rigid_body_rotation{origin = (x0, y0, z0), angular_velocity = (wx, wy, wz)}\n"
-  "  Creates a velocity field representing a rigid body rotating in 3D space.\n"
-  "  Arguments are:\n"
-  "    origin           - Point about which the body rotates.\n"
-  "    angular_velocity - Angular velocity (pseudo)vector describing the rotation.";
-
-typedef struct 
-{
-  point_t x0; // center of rotation
-  vector_t omega; // Angular velocity pseudovector.
-} sbr_t;
-
-static void sbr_eval(void* context, point_t* x, real_t t, real_t* val)
-{
-  sbr_t* sbr = context;
-
-  // Displacement vector r.
-  vector_t r;
-  point_displacement(&sbr->x0, x, &r);
-
-  // V = dr/dt = omega x r.
-  vector_cross(&sbr->omega, &r, (vector_t*)val);
-}
-
-static int rigid_body_rotation(lua_State* lua)
-{
-  // Check the number of arguments.
-  int num_args = lua_gettop(lua);
-  if ((num_args != 1) || !lua_istable(lua, 1))
-    return luaL_error(lua, rigid_body_rotation_usage);
-
-  // Get the origin if it's given.
-  lua_pushstring(lua, "origin"); // pushes key onto stack
-  lua_gettable(lua, 1); // replaces key with value
-  if (!lua_isnil(lua, -1) && !lua_ispoint(lua, -1))
-    return luaL_error(lua, rigid_body_rotation_usage);
-  point_t* x0 = lua_topoint(lua, -1);
-  lua_pop(lua, 1);
-
-  // Get the angular velocity vector.
-  lua_pushstring(lua, "angular_velocity"); // pushes key onto stack
-  lua_gettable(lua, 1); // replaces key with value
-  if (lua_isnil(lua, -1) || !lua_isvector(lua, -1))
-    return luaL_error(lua, rigid_body_rotation_usage);
-  vector_t* omega = lua_tovector(lua, -1);
-  lua_pop(lua, 1);
-
-  // Set up the rigid body rotation thingy.
-  sbr_t* sbr = polymec_malloc(sizeof(sbr_t));
-  if (x0 != NULL)
-    sbr->x0 = *x0;
-  else
-    sbr->x0.x = sbr->x0.y = sbr->x0.z = 0.0;
-  sbr->omega = *omega;
-
-  // Create and return the function.
-  char name[1025];
-  snprintf(name, 1024, "Rigid body rotation(x0 = (%g, %g, %g), omega = (%g, %g, %g))",
-           sbr->x0.x, sbr->x0.y, sbr->x0.z, omega->x, omega->y, omega->z);
-  st_func_vtable vtable = {.eval = sbr_eval, .dtor = polymec_free};
-  st_func_t* func = st_func_new(name, sbr, vtable, ST_FUNC_HETEROGENEOUS, ST_FUNC_CONSTANT, 3);
-
-  lua_pushvectorfunction(lua, func);
-  return 1;
-}
-
-static void interpreter_register_advect_functions(interpreter_t* interp)
-{
-  interpreter_register_function(interp, "rigid_body_rotation", rigid_body_rotation, 
-    docstring_from_string(rigid_body_rotation_usage));
-}
-
 //------------------------------------------------------------------------
 //                    End str_advect-specific Lua functions
 //------------------------------------------------------------------------
@@ -1049,7 +976,6 @@ static model_t* advect_ctor()
   // Register polyamri- and advection-specific functions.
   interpreter_t* interp = model_interpreter(model);
   interpreter_register_polyamri_functions(interp);
-  interpreter_register_advect_functions(interp);
 
   return model;
 }

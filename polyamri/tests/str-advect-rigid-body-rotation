@@ -4,13 +4,13 @@
 x0 = {0, 0, 0}
 
 -- Initial condition.
--- ball_and_jack(x0, ball_radius, ball_value, jack_size, jack_value)
-initial_state = ball_and_jack(x0, 0.4, 1.0, 0.6, 2.0)
+-- scalar_functions.ball_and_jack(x0, ball_radius, ball_value, jack_size, jack_value)
+initial_state = scalar_functions.ball_and_jack(x0, 0.4, 1.0, 0.6, 2.0)
 
 -- Rotational velocity defined by an angular velocity pseudovector omega, and 
 -- an origin x0 through which omega points. 
 omega = {0, 0, 1}
-velocity = rigid_body_rotation{origin = x0, angular_velocity = omega}
+velocity = vector_functions.rigid_body_rotation{origin = x0, angular_velocity = omega}
 
 -- Structured grid.
 grid = structured_grid{num_cells = {128, 128, 128},
