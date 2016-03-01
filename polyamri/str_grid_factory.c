@@ -42,23 +42,6 @@ str_grid_t* str_grid_factory_brick(str_grid_factory_t* factory,
   ASSERT(npy > 0);
   ASSERT(npz > 0);
 
-  // Here we set up the machinery to fill ghost cells in the grid.
-  str_grid_patch_filler_t* fill_from_east = copy_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY, STR_GRID_PATCH_X2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_west = copy_str_grid_patch_filler_new(STR_GRID_PATCH_X2_BOUNDARY, STR_GRID_PATCH_X1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_south = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Y2_BOUNDARY, STR_GRID_PATCH_Y1_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_north = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Y1_BOUNDARY, STR_GRID_PATCH_Y2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_above = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY, STR_GRID_PATCH_Z2_BOUNDARY);
-  str_grid_patch_filler_t* fill_from_below = copy_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY, STR_GRID_PATCH_Z1_BOUNDARY);
-
-  // By default, we impose a zero "flux" on all boundaries, on the assumption that the 
-  // solution is zero at the boundary.
-  str_grid_patch_filler_t* zero_flux_x1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_x2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X2_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_y1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Y1_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_y2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Y2_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_z1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_z2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY);
-
   // Create the grid.
   str_grid_t* grid = str_grid_new(npx, npy, npz, 
                                   factory->patch_nx, factory->patch_ny, factory->patch_nz, 
