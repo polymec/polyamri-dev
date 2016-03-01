@@ -9,7 +9,6 @@
 #include "core/unordered_set.h"
 #include "core/unordered_map.h"
 #include "polyamri/str_grid.h"
-#include "polyamri/str_grid_patch_filler.h"
 
 #if POLYMEC_HAVE_OPENMP
 #include <omp.h>
@@ -25,15 +24,8 @@ struct str_grid_t
   int_unordered_set_t* patches;
   int* patch_indices;
 
-  // Patch fillers.
-  int_ptr_unordered_map_t* patch_fillers;
-
   // This flag is set by str_grid_finalize() after a grid has been assembled.
   bool finalized;
-
-  // A mapping from a grid's ghost fill tokens to lists of tokens for the 
-  // underlying patch fill operations.
-  int_ptr_unordered_map_t* tokens;
 
   // Properties stored in this grid.
   string_ptr_unordered_map_t* properties;
@@ -64,9 +56,7 @@ str_grid_t* str_grid_new(int nx, int ny, int nz,
   grid->z_periodic = periodic_in_z;
   grid->patches = int_unordered_set_new();
   grid->patch_indices = NULL;
-  grid->patch_fillers = int_ptr_unordered_map_new();
   grid->finalized = false;
-  grid->tokens = int_ptr_unordered_map_new();
   grid->properties = string_ptr_unordered_map_new();
   return grid;
 }
@@ -76,18 +66,9 @@ static inline int patch_index(str_grid_t* grid, int i, int j, int k)
   return grid->ny*grid->nz*i + grid->nz*j + k;
 }
 
-static inline void get_patch_indices(str_grid_t* grid, int index, int* i, int* j, int *k)
-{
-  *i = index / (grid->ny*grid->nz);
-  *j = (index - grid->ny*grid->nz*(*i) ) / grid->nz;
-  *k = index - grid->ny*grid->nz*(*i) - grid->nz*(*j);
-}
-
 void str_grid_free(str_grid_t* grid)
 {
   string_ptr_unordered_map_free(grid->properties);
-  int_ptr_unordered_map_free(grid->tokens);
-  int_ptr_unordered_map_free(grid->patch_fillers);
   int_unordered_set_free(grid->patches);
   if (grid->patch_indices != NULL)
     polymec_free(grid->patch_indices);
@@ -100,23 +81,6 @@ void str_grid_insert_patch(str_grid_t* grid, int i, int j, int k)
   int index = patch_index(grid, i, j, k);
   ASSERT(!int_unordered_set_contains(grid->patches, index));
   int_unordered_set_insert(grid->patches, index);
-}
-
-void str_grid_append_patch_filler(str_grid_t* grid, int i, int j, int k,
-                                  str_grid_patch_filler_t* patch_filler)
-{
-  int index = patch_index(grid, i, j, k);
-  ASSERT(int_unordered_set_contains(grid->patches, index));
-  ptr_array_t** fillers_p = (ptr_array_t**)int_ptr_unordered_map_get(grid->patch_fillers, index);
-  ptr_array_t* fillers;
-  if (fillers_p != NULL)
-    fillers = *fillers_p;
-  else
-  {
-    fillers = ptr_array_new();
-    int_ptr_unordered_map_insert_with_v_dtor(grid->patch_fillers, index, fillers, DTOR(ptr_array_free));
-  }
-  ptr_array_append(fillers, patch_filler);
 }
 
 void str_grid_finalize(str_grid_t* grid)
@@ -269,76 +233,5 @@ bool str_grid_next_property(str_grid_t* grid, int* pos,
     *prop_serializer = prop->serializer;
   }
   return result;
-}
-
-int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* data)
-{
-  ASSERT(grid->finalized);
-  ASSERT(str_grid_cell_data_grid(data) == grid);
-
-  // Dream up a new token for ghost fills.
-  int token = 0;
-  while (int_ptr_unordered_map_contains(grid->tokens, token))
-    ++token;
-
-  // Map our token to a list of underlying operation tokens.`
-  int_array_t* op_tokens = int_array_new();
-  int_ptr_unordered_map_insert_with_v_dtor(grid->tokens, token, op_tokens, DTOR(int_array_free));
-
-  // Begin the ghost fill operations and gather tokens.
-  int pos = 0, patch_index;
-  ptr_array_t* fillers;
-  while (int_ptr_unordered_map_next(grid->patch_fillers, &pos, &patch_index, (void**)&fillers))
-  {
-    int i, j, k;
-    get_patch_indices(grid, patch_index, &i, &j, &k);
-
-    // Go through all the fillers for this patch.
-    for (int l = 0; l < fillers->size; ++l)
-    {
-      str_grid_patch_filler_t* filler = fillers->data[l];
-      int op_token = str_grid_patch_filler_start(filler, i, j, k, data);
-      ASSERT((op_token >= 0) || (op_token == -1));
-
-      if (op_token != -1) // -1 <-> no finish operation.
-      {
-        // We stash both the patch index and the op token.
-        int_array_append(op_tokens, patch_index);
-        int_array_append(op_tokens, op_token);
-      }
-    }
-  }
-
-  return token;
-}
-
-void str_grid_finish_filling_ghost_cells(str_grid_t* grid, int token)
-{
-  ASSERT(grid->finalized);
-
-  // Retrieve the operation tokens corresponding to this one and 
-  // finish out the fill operations.
-  int_array_t** op_tokens_p = (int_array_t**)int_ptr_unordered_map_get(grid->tokens, token);
-  ASSERT(op_tokens_p != NULL); // Token exists in our list?
-  int_array_t* op_tokens = *op_tokens_p;
-  ASSERT((op_tokens->size % 2) == 0); // Should be patch index/op token pairs
-  int n = op_tokens->size/2;
-  for (int l = 0; l < n; ++l)
-  {
-    int patch_index = op_tokens->data[2*n];
-    int op_token = op_tokens->data[2*n+1];
-    ASSERT(op_token >= 0);
-    str_grid_patch_filler_t* filler = (str_grid_patch_filler_t*)(*int_ptr_unordered_map_get(grid->patch_fillers, patch_index));
-    str_grid_patch_filler_finish(filler, op_token);
-  }
-
-  // Remove this entry from our token mapping.
-  int_ptr_unordered_map_delete(grid->tokens, token);
-}
-
-void str_grid_fill_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* data)
-{
-  int token = str_grid_start_filling_ghost_cells(grid, data);
-  str_grid_finish_filling_ghost_cells(grid, token);
 }
 

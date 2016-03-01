@@ -53,12 +53,6 @@ void str_grid_free(str_grid_t* grid);
 // Inserts a new patch at (i, j, k) in the nx x ny x nz array of patches.
 void str_grid_insert_patch(str_grid_t* grid, int i, int j, int k);
 
-// Appends a patch filler to the list of fillers that fill the ghost cells of 
-// the patch at the given patch coordinates. This function produces a fatal 
-// error if there is no patch at (i, j, k).
-void str_grid_append_patch_filler(str_grid_t* grid, int i, int j, int k,
-                                  str_grid_patch_filler_t* patch_filler);
-
 // Finalizes the construction process for the grid. This must be called 
 // before any of the grid's usage methods (below) are invoked. Should only 
 // be called once.
@@ -118,31 +112,6 @@ void str_grid_delete_property(str_grid_t* grid, const char* property);
 bool str_grid_next_property(str_grid_t* grid, int* pos, 
                             char** prop_name, void** prop_data, 
                             serializer_t** prop_serializer);
-
-//------------------------------------------------------------------------
-//                          Service methods
-//------------------------------------------------------------------------
-// The following methods provide services to other classes. They can be 
-// used directly by folks who Really Understand What They're Doing.
-//------------------------------------------------------------------------
-
-// Data can be centered on cells, faces, edges, or nodes, but only cell data
-// can have ghost data.
-typedef struct str_grid_cell_data_t str_grid_cell_data_t;
-
-// Fills all ghost cells in the patches within the given grid data. This 
-// function may involve communication.
-void str_grid_fill_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* data);
-
-// Begins an asynchronous ghost-cell-filling operation in the patches within 
-// the given grid data, communicating as needed. Returns an integer token that 
-// can be used with str_grid_finish_filling_ghosts, below.
-int str_grid_start_filling_ghost_cells(str_grid_t* grid, str_grid_cell_data_t* data);
-
-// Concludes an asynchronous ghost-cell-filling operation initiated by 
-// a call to str_grid_start_filling_ghosts(), using the token returned by
-// that call.
-void str_grid_finish_filling_ghost_cells(str_grid_t* grid, int token);
 
 #endif
 

@@ -178,23 +178,6 @@ bool str_grid_cell_data_next_patch(str_grid_cell_data_t* cell_data, int* pos,
   return result;
 }
 
-void str_grid_cell_data_fill_ghosts(str_grid_cell_data_t* cell_data)
-{
-  str_grid_fill_ghost_cells(cell_data->grid, cell_data);
-}
-
-void str_grid_cell_data_start_filling_ghosts(str_grid_cell_data_t* cell_data)
-{
-  cell_data->token = str_grid_start_filling_ghost_cells(cell_data->grid, cell_data);
-}
-
-void str_grid_cell_data_finish_filling_ghosts(str_grid_cell_data_t* cell_data)
-{
-  ASSERT(cell_data->token != -1); // No ghost fill in progress?
-  str_grid_finish_filling_ghost_cells(cell_data->grid, cell_data->token);
-  cell_data->token = -1;
-}
-
 void* str_grid_cell_data_buffer(str_grid_cell_data_t* cell_data)
 {
   return cell_data->buffer;
