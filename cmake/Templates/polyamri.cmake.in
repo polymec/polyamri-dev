@@ -3,5 +3,5 @@
 include(polymec)
 set(POLYAMRI_LIBRARIES "@POLYAMRI_LIBRARIES@")
 set(POLYAMRI_VERSION "@POLYAMRI_VERSION@")
-include_directories("@CMAKE_INSTALL_PREFIX@/include/polyamri")
+include_directories("@CMAKE_INSTALL_PREFIX@/include/polymec")
 

@@ -33,6 +33,10 @@ set(CMAKE_INSTALL_RPATH "${POLYMEC_PREFIX}/lib")
 add_custom_target(update_version_h ALL
                   python ${POLYMEC_PREFIX}/share/polymec/update_version_h.py polyamri ${POLYAMRI_VERSION} ${PROJECT_BINARY_DIR}/polyamri/polyamri_version.h)
 
+# Generate polyamri.h at the top level.
+add_custom_target(generate_top_header ALL
+                  python ${PROJECT_SOURCE_DIR}/tools/generate_top_header.py ${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR}/include)
+                  
 enable_testing()
 
 add_subdirectory(polyamri)
@@ -43,6 +47,7 @@ configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Templates/polyamri.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/polyamri.cmake"
 )
+install(FILES ${PROJECT_BINARY_DIR}/include/polyamri.h DESTINATION include/polymec)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/polyamri.cmake DESTINATION share/polymec)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/add_polyamri_executable.cmake DESTINATION share/polymec)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/add_polyamri_test.cmake DESTINATION share/polymec)
