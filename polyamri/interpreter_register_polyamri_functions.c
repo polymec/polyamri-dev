@@ -7,6 +7,7 @@
 
 #include "model/interpreter.h"
 #include "polyamri/str_grid_factory.h"
+#include "polyamri/str_grid_patch_filler.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
 
 // Lua stuff.
@@ -14,17 +15,38 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
-// Type code for structured grids.
+// Type codes for structured grids and their friends.
 static int structured_grid_type_code = -1;
+static int patch_filler_type_code = -1;
 
-static const char* structured_grid_usage = 
-  "grid = structured_grid{num_cells = {nx, ny, nz},\n"
-  "                       patch_size = {px, py, pz},\n"
-  "                       domain = D,\n"
-  "                       regions = {name1 = indicator1,\n"
-  "                                  name2 = indicator2,\n"
-  "                                  ...\n"
-  "                                  nameN = indicatorN}}\n"
+// This helper returns the grid spacing in the normal direction of the 
+// given boundary.
+static real_t grid_spacing(str_grid_t* grid, str_grid_boundary_t boundary)
+{
+  int npx, npy, npz, nx, ny, nz;
+  str_grid_get_extents(grid, &npx, &npy, &npz);
+  str_grid_get_patch_size(grid, &nx, &ny, &nz);
+  real_t h;
+  switch(boundary)
+  {
+    case STR_GRID_X1_BOUNDARY:
+    case STR_GRID_X2_BOUNDARY: h = 1.0 / (npx*nx); break;
+    case STR_GRID_Y1_BOUNDARY:
+    case STR_GRID_Y2_BOUNDARY: h = 1.0 / (npy*ny); break;
+    case STR_GRID_Z1_BOUNDARY:
+    case STR_GRID_Z2_BOUNDARY: h = 1.0 / (npz*nz);
+  }
+  return h;
+}
+
+static const char* block_usage = 
+  "grid = structured_grids.block{num_cells = {nx, ny, nz},\n"
+  "                              patch_size = {px, py, pz},\n"
+  "                              domain = D,\n"
+  "                              regions = {name1 = indicator1,\n"
+  "                                         name2 = indicator2,\n"
+  "                                         ...\n"
+  "                                         nameN = indicatorN}}\n"
   "  Creates a structured grid spanning the given domain with the given\n"
   "  numbers of cells in the x, y, z directions, comprising patches of the\n"
   "  given dimensions (in cells). Optionally, mapping may be a bounding box\n"
@@ -34,23 +56,23 @@ static const char* structured_grid_usage =
   "  function I(x, y, z, t) for a region R maps a cell C to the value 1 if\n"
   "  the centroid of C falls within R and 0 otherwise.\n";
 
-static int structured_grid(lua_State* lua)
+static int block(lua_State* lua)
 {
   // Check the number of arguments.
   int num_args = lua_gettop(lua);
   if ((num_args != 1) || !lua_istable(lua, 1))
-    return luaL_error(lua, structured_grid_usage);
+    return luaL_error(lua, block_usage);
 
   // Parse the numbers of cells.
   int num_cells[3];
   lua_pushstring(lua, "num_cells"); // pushes key onto stack
   lua_gettable(lua, 1); // replaces key with value
   if (!lua_issequence(lua, -1))
-    return luaL_error(lua, structured_grid_usage);
+    return luaL_error(lua, block_usage);
   int len;
   real_t* seq = lua_tosequence(lua, -1, &len);
   if (len != 3)
-    return luaL_error(lua, structured_grid_usage);
+    return luaL_error(lua, block_usage);
   for (int i = 0; i < 3; ++i)
     num_cells[i] = (int)seq[i];
   lua_pop(lua, 1);
@@ -60,10 +82,10 @@ static int structured_grid(lua_State* lua)
   lua_pushstring(lua, "patch_size"); // pushes key onto stack
   lua_gettable(lua, 1); // replaces key with value
   if (!lua_issequence(lua, -1)) 
-    return luaL_error(lua, structured_grid_usage);
+    return luaL_error(lua, block_usage);
   seq = lua_tosequence(lua, -1, &len);
   if (len != 3)
-    return luaL_error(lua, structured_grid_usage);
+    return luaL_error(lua, block_usage);
   for (int i = 0; i < 3; ++i)
     patch_size[i] = (int)seq[i];
   lua_pop(lua, 1);
@@ -107,7 +129,7 @@ static int structured_grid(lua_State* lua)
 
     // Make sure regions is a table.
     if (!lua_istable(lua, t))
-      return luaL_error(lua, structured_grid_usage);
+      return luaL_error(lua, block_usage);
 
     // Traverse the regions table.
     lua_pushnil(lua);
@@ -150,11 +172,149 @@ static int structured_grid(lua_State* lua)
   return 1;
 }
 
+static const char* robin_bc_usage = 
+  "bc = structured_grids.robin_bc(grid, boundary, A, B, C, component = 0)\n"
+  "  Creates an object that enforces a Robin boundary condition of the form\n"
+  "    A * U + B * dU/dn = C\n"
+  "  on a component of the solution U at the given boundary on the given grid.\n"
+  "  Boundary should be one of 'x1', 'x2', 'y1', 'y2', 'z1', or 'z2'.";
+
+static int robin_bc(lua_State* lua)
+{
+  // Check the number of arguments.
+  int num_args = lua_gettop(lua);
+  if (((num_args != 5) && (num_args != 6)) || 
+      !lua_isuserdefined(lua, 1, structured_grid_type_code) || 
+      !lua_isstring(lua, 2) || !lua_isnumber(lua, 3) || 
+      !lua_isnumber(lua, 4) || !lua_isnumber(lua, 5))
+    return luaL_error(lua, robin_bc_usage);
+
+  // Get the arguments.
+  str_grid_t* grid = lua_touserdefined(lua, 1, structured_grid_type_code);
+  if (grid == NULL)
+    return luaL_error(lua, robin_bc_usage);
+  const char* boundary = lua_tostring(lua, 2);
+  const char* boundaries[] = {"x1", "x2", "y1", "y2", "z1", "z2"};
+  int b_index = string_find_in_list(boundary, boundaries, false);
+  if (b_index == -1)
+    return luaL_error(lua, robin_bc_usage);
+  real_t A = (real_t)lua_tonumber(lua, 3);
+  real_t B = (real_t)lua_tonumber(lua, 4);
+  real_t C = (real_t)lua_tonumber(lua, 5);
+  int component = 0;
+  if (num_args == 6)
+  {
+    if (!lua_isinteger(lua, 6))
+      luaL_error(lua, robin_bc_usage);
+    component = (int)lua_tointeger(lua, 6);
+  }
+
+  // Extract the grid spacing parameter h in the normal direction of the boundary.
+  real_t h = grid_spacing(grid, b_index);
+
+  // Construct the str_grid_patch_filler and push it into the interpreter.
+  str_grid_patch_filler_t* bc = robin_bc_str_grid_patch_filler_new(A, B, C, h, component, b_index);
+  lua_pushuserdefined(lua, bc, patch_filler_type_code, NULL);
+
+  return 1;
+}
+
+static const char* dirichlet_bc_usage = 
+  "bc = structured_grids.dirichlet_bc(grid, boundary, F, component = 0)\n"
+  "  Creates an object that enforces a Dirichlet boundary condition of the form\n"
+  "    U = F\n"
+  "  on a component of the solution U at the given boundary on the given grid.\n"
+  "  Boundary should be one of 'x1', 'x2', 'y1', 'y2', 'z1', or 'z2'.";
+
+static int dirichlet_bc(lua_State* lua)
+{
+  // Check the number of arguments.
+  int num_args = lua_gettop(lua);
+  if (((num_args != 3) && (num_args != 4)) || 
+      !lua_isuserdefined(lua, 1, structured_grid_type_code) || 
+      !lua_isstring(lua, 2) || !lua_isnumber(lua, 3))
+    return luaL_error(lua, dirichlet_bc_usage);
+
+  // Get the arguments.
+  str_grid_t* grid = lua_touserdefined(lua, 1, structured_grid_type_code);
+  if (grid == NULL)
+    return luaL_error(lua, dirichlet_bc_usage);
+  const char* boundary = lua_tostring(lua, 2);
+  const char* boundaries[] = {"x1", "x2", "y1", "y2", "z1", "z2"};
+  int b_index = string_find_in_list(boundary, boundaries, false);
+  if (b_index == -1)
+    return luaL_error(lua, dirichlet_bc_usage);
+  real_t F = (real_t)lua_tonumber(lua, 3);
+  int component = 0;
+  if (num_args == 4)
+  {
+    if (!lua_isinteger(lua, 4))
+      luaL_error(lua, dirichlet_bc_usage);
+    component = (int)lua_tointeger(lua, 4);
+  }
+
+  // Construct the str_grid_patch_filler and push it into the interpreter.
+  str_grid_patch_filler_t* bc = dirichlet_bc_str_grid_patch_filler_new(F, component, b_index);
+  lua_pushuserdefined(lua, bc, patch_filler_type_code, NULL);
+
+  return 1;
+}
+
+static const char* neumann_bc_usage = 
+  "bc = structured_grids.neumann_bc(grid, boundary, A, B, component = 0)\n"
+  "  Creates an object that enforces a Neumann boundary condition of the form\n"
+  "    A * dU/dn = B\n"
+  "  on a component of the solution U at the given boundary on the given grid.\n"
+  "  Boundary should be one of 'x1', 'x2', 'y1', 'y2', 'z1', or 'z2'.";
+
+static int neumann_bc(lua_State* lua)
+{
+  // Check the number of arguments.
+  int num_args = lua_gettop(lua);
+  if (((num_args != 4) && (num_args != 5)) || 
+      !lua_isuserdefined(lua, 1, structured_grid_type_code) || 
+      !lua_isstring(lua, 2) || !lua_isnumber(lua, 3) || !lua_isnumber(lua, 4))
+    return luaL_error(lua, neumann_bc_usage);
+
+  // Get the arguments.
+  str_grid_t* grid = lua_touserdefined(lua, 1, structured_grid_type_code);
+  if (grid == NULL)
+    return luaL_error(lua, neumann_bc_usage);
+  const char* boundary = lua_tostring(lua, 2);
+  const char* boundaries[] = {"x1", "x2", "y1", "y2", "z1", "z2"};
+  int b_index = string_find_in_list(boundary, boundaries, false);
+  if (b_index == -1)
+    return luaL_error(lua, neumann_bc_usage);
+  real_t A = (real_t)lua_tonumber(lua, 3);
+  real_t B = (real_t)lua_tonumber(lua, 4);
+  int component = 0;
+  if (num_args == 5)
+  {
+    if (!lua_isinteger(lua, 5))
+      luaL_error(lua, neumann_bc_usage);
+    component = (int)lua_tointeger(lua, 5);
+  }
+
+  // Extract the grid spacing parameter h in the normal direction of the boundary.
+  real_t h = grid_spacing(grid, b_index);
+
+  // Construct the str_grid_patch_filler and push it into the interpreter.
+  str_grid_patch_filler_t* bc = neumann_bc_str_grid_patch_filler_new(A, B, h, component, b_index);
+  lua_pushuserdefined(lua, bc, patch_filler_type_code, NULL);
+
+  return 1;
+}
+
 void interpreter_register_polyamri_functions(interpreter_t* interp)
 {
   structured_grid_type_code = interpreter_new_user_defined_type_code(interp);
-  interpreter_register_function(interp, "structured_grid", structured_grid, 
-    docstring_from_string(structured_grid_usage));
+  patch_filler_type_code = interpreter_new_user_defined_type_code(interp);
+
+  interpreter_register_global_table(interp, "structured_grids", NULL);
+  interpreter_register_global_method(interp, "structured_grids", "block", block, docstring_from_string(block_usage));
+  interpreter_register_global_method(interp, "structured_grids", "robin_bc", robin_bc, docstring_from_string(robin_bc_usage));
+  interpreter_register_global_method(interp, "structured_grids", "dirichlet_bc", dirichlet_bc, docstring_from_string(dirichlet_bc_usage));
+  interpreter_register_global_method(interp, "structured_grids", "neumann_bc", neumann_bc, docstring_from_string(neumann_bc_usage));
 }
 
 str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name)
@@ -162,3 +322,7 @@ str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name)
   return interpreter_get_user_defined(interp, name, structured_grid_type_code);
 }
 
+str_grid_patch_filler_t* interpreter_get_str_grid_patch_filler(interpreter_t* interp, const char* name)
+{
+  return interpreter_get_user_defined(interp, name, patch_filler_type_code);
+}

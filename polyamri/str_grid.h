@@ -39,13 +39,10 @@ typedef enum
 //------------------------------------------------------------------------
 
 // Creates a new empty grid level defined on the region filling [0,1]x[0,1]x[0,1]
-// with nx x ny x nz patches of size px x py x pz. This grid is not associated 
+// with npx x npy x npz patches of size nx x ny x nz. This grid is not associated 
 // with any other grids.
-str_grid_t* str_grid_new(int nx, int ny, int nz, 
-                         int px, int py, int pz,
-                         bool periodic_in_x, 
-                         bool periodic_in_y, 
-                         bool periodic_in_z);
+str_grid_t* str_grid_new(int npx, int npy, int npz, 
+                         int nx, int ny, int nz);
 
 // Destroys the given grid and all of its patches.
 void str_grid_free(str_grid_t* grid);
@@ -66,12 +63,12 @@ void str_grid_finalize(str_grid_t* grid);
 //------------------------------------------------------------------------
 
 // Fetches the number of patches in this grid in the x, y, and z directions, 
-// placing them in nx, ny, nz.
-void str_grid_get_extents(str_grid_t* grid, int* nx, int* ny, int* nz);
+// placing them in npx, npy, npz.
+void str_grid_get_extents(str_grid_t* grid, int* npx, int* npy, int* npz);
 
 // Fetches the number of cells in each patch on this grid in the x, y, and z 
-// directions, placing them in pnx, pny, pnz.
-void str_grid_get_patch_size(str_grid_t* grid, int* pnx, int* pny, int* pnz);
+// directions, placing them in nx, ny, nz.
+void str_grid_get_patch_size(str_grid_t* grid, int* nx, int* ny, int* nz);
 
 // Returns the number of patches that can be stored on this grid.
 int str_grid_num_patches(str_grid_t* grid);
@@ -83,10 +80,6 @@ bool str_grid_next_patch(str_grid_t* grid, int* pos, int* i, int* j, int* k);
 
 // Returns true if the grid has a patch at (i, j, k), false if not.
 bool str_grid_has_patch(str_grid_t* grid, int i, int j, int k);
-
-// Queries the periodicity of the grid, placing booleans for the 
-// x, y, and z periodicity into the given (3-wide) periodicity array.
-void str_grid_get_periodicity(str_grid_t* grid, bool* periodicity);
 
 // Associates a named piece of metadata (a "property") with the grid itself.
 // This can be used to store information about (for example) how the grid 

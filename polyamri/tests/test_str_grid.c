@@ -14,7 +14,7 @@
 
 void test_ctor(void** state) 
 {
-  str_grid_t* grid = str_grid_new(4, 4, 4, 16, 16, 16, false, false, false);
+  str_grid_t* grid = str_grid_new(4, 4, 4, 16, 16, 16);
   assert_int_equal(0, str_grid_num_patches(grid));
   str_grid_free(grid);
 }
@@ -22,7 +22,7 @@ void test_ctor(void** state)
 static void test_fill_ghosts(void** state)
 { 
   // Set up a 4 x 4 x 4 array of patches in a grid and fill ghost values.
-  str_grid_t* grid = str_grid_new(4, 4, 4, 16, 16, 16, true, true, true);
+  str_grid_t* grid = str_grid_new(4, 4, 4, 16, 16, 16);
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)

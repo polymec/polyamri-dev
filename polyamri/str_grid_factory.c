@@ -44,8 +44,7 @@ str_grid_t* str_grid_factory_brick(str_grid_factory_t* factory,
 
   // Create the grid.
   str_grid_t* grid = str_grid_new(npx, npy, npz, 
-                                  factory->patch_nx, factory->patch_ny, factory->patch_nz, 
-                                  false, false, false);
+                                  factory->patch_nx, factory->patch_ny, factory->patch_nz);
 
   // FIXME: For now, we assume this is a serial grid and just assign all the patches to rank 0.
   int nprocs;

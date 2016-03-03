@@ -230,123 +230,204 @@ str_grid_patch_filler_t* copy_str_grid_patch_filler_new(str_grid_patch_boundary_
 }
 
 //------------------------------------------------------------------------
-//                      Zero-flux patch filler
+//                      Robin BC patch filler
 //------------------------------------------------------------------------
 
-static int zf_x1(void* context, 
-                 int i, int j, int k,
-                 str_grid_cell_data_t* cell_data)
+typedef struct
 {
+  real_t A;
+  real_t B;
+  real_t C;
+  real_t h;
+  int component;
+} robin_bc_t;
+
+static int robin_x1(void* context, 
+                    int i, int j, int k,
+                    str_grid_cell_data_t* cell_data)
+{
+  robin_bc_t* robin = context;
   str_grid_patch_t* patch = str_grid_cell_data_patch(cell_data, i, j, k);
-  int nc = patch->nc, ng = patch->ng;
+  int ng = patch->ng, c = robin->component;
+  ASSERT(c < patch->nc);
+  real_t num = 0.5 * robin->A - robin->B/robin->h;
+  real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
   for (int j = patch->j1; j < patch->j2; ++j)
     for (int k = patch->k1; k < patch->k2; ++k)
       for (int g = 0; g < ng; ++g)
-        for (int c = 0; c < nc; ++c)
-          data[patch->i1-g][j][k][c] = data[patch->i1+ng-g][j][k][c];
+        data[patch->i1-g][j][k][c] = (robin->C - num * data[patch->i1+ng-g][j][k][c]) / denom;
 
   return -1;
 }
 
-static int zf_x2(void* context, 
-                 int i, int j, int k,
-                 str_grid_cell_data_t* cell_data)
+static int robin_x2(void* context, 
+                    int i, int j, int k,
+                    str_grid_cell_data_t* cell_data)
 {
+  robin_bc_t* robin = context;
   str_grid_patch_t* patch = str_grid_cell_data_patch(cell_data, i, j, k);
-  int nc = patch->nc, ng = patch->ng;
+  int ng = patch->ng, c = robin->component;
+  ASSERT(c < patch->nc);
+  real_t num = 0.5 * robin->A - robin->B/robin->h;
+  real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
   for (int j = patch->j1; j < patch->j2; ++j)
     for (int k = patch->k1; k < patch->k2; ++k)
       for (int g = 0; g < ng; ++g)
-        for (int c = 0; c < nc; ++c)
-          data[patch->i2+g][j][k][c] = data[patch->i2-ng+g][j][k][c];
+        data[patch->i2+g][j][k][c] = (robin->C - num * data[patch->i2-ng+g][j][k][c]) / denom;
 
   return -1;
 }
 
-static int zf_y1(void* context, 
-                 int i, int j, int k,
-                 str_grid_cell_data_t* cell_data)
+static int robin_y1(void* context, 
+                    int i, int j, int k,
+                    str_grid_cell_data_t* cell_data)
 {
+  robin_bc_t* robin = context;
   str_grid_patch_t* patch = str_grid_cell_data_patch(cell_data, i, j, k);
-  int nc = patch->nc, ng = patch->ng;
+  int ng = patch->ng, c = robin->component;
+  ASSERT(c < patch->nc);
+  real_t num = 0.5 * robin->A - robin->B/robin->h;
+  real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
   for (int i = patch->i1; i < patch->i2; ++i)
     for (int k = patch->k1; k < patch->k2; ++k)
       for (int g = 0; g < ng; ++g)
-        for (int c = 0; c < nc; ++c)
-          data[i][patch->j1-g][k][c] = data[i][patch->j1+ng-g][k][c];
+        data[i][patch->j1-g][k][c] = (robin->C - num * data[i][patch->j1+ng-g][k][c]) / denom;
 
   return -1;
 }
 
-static int zf_y2(void* context, 
-                 int i, int j, int k,
-                 str_grid_cell_data_t* cell_data)
+static int robin_y2(void* context, 
+                    int i, int j, int k,
+                    str_grid_cell_data_t* cell_data)
 {
+  robin_bc_t* robin = context;
   str_grid_patch_t* patch = str_grid_cell_data_patch(cell_data, i, j, k);
-  int nc = patch->nc, ng = patch->ng;
+  int ng = patch->ng, c = robin->component;
+  ASSERT(c < patch->nc);
+  real_t num = 0.5 * robin->A - robin->B/robin->h;
+  real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
   for (int i = patch->i1; i < patch->i2; ++i)
     for (int k = patch->k1; k < patch->k2; ++k)
       for (int g = 0; g < ng; ++g)
-        for (int c = 0; c < nc; ++c)
-          data[i][patch->j2+g][k][c] = data[i][patch->j2-ng+g][k][c];
+        data[i][patch->j2+g][k][c] = (robin->C - num * data[i][patch->j2-ng+g][k][c]) / denom;
 
   return -1;
 }
 
-static int zf_z1(void* context, 
-                 int i, int j, int k,
-                 str_grid_cell_data_t* cell_data)
+static int robin_z1(void* context, 
+                    int i, int j, int k,
+                    str_grid_cell_data_t* cell_data)
 {
+  robin_bc_t* robin = context;
   str_grid_patch_t* patch = str_grid_cell_data_patch(cell_data, i, j, k);
-  int nc = patch->nc, ng = patch->ng;
+  int ng = patch->ng, c = robin->component;
+  ASSERT(c < patch->nc);
+  real_t num = 0.5 * robin->A - robin->B/robin->h;
+  real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
   for (int i = patch->i1; i < patch->i2; ++i)
     for (int j = patch->j1; j < patch->j2; ++j)
       for (int g = 0; g < ng; ++g)
-        for (int c = 0; c < nc; ++c)
-          data[i][j][patch->k2-g][c] = data[i][j][patch->k2+ng-g][c];
+        data[i][j][patch->k2-g][c] = (robin->C - num * data[i][j][patch->k2+ng-g][c]) / denom;
 
   return -1;
 }
 
-static int zf_z2(void* context, 
-                 int i, int j, int k,
-                 str_grid_cell_data_t* cell_data)
+static int robin_z2(void* context, 
+                    int i, int j, int k,
+                    str_grid_cell_data_t* cell_data)
 {
+  robin_bc_t* robin = context;
   str_grid_patch_t* patch = str_grid_cell_data_patch(cell_data, i, j, k);
-  int nc = patch->nc, ng = patch->ng;
+  int ng = patch->ng, c = robin->component;
+  ASSERT(c < patch->nc);
+  real_t num = 0.5 * robin->A - robin->B/robin->h;
+  real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
   for (int i = patch->i1; i < patch->i2; ++i)
     for (int j = patch->j1; j < patch->j2; ++j)
       for (int g = 0; g < ng; ++g)
-        for (int c = 0; c < nc; ++c)
-          data[i][j][patch->k2+g][c] = data[i][j][patch->k2-ng+g][c];
+        data[i][j][patch->k2+g][c] = (robin->C - num * data[i][j][patch->k2-ng+g][c]) / denom;
 
   return -1;
 }
 
-str_grid_patch_filler_t* zero_flux_str_grid_patch_filler_new(str_grid_patch_boundary_t patch_boundary)
+static robin_bc_t* robin_bc_new(real_t A, real_t B, real_t C, real_t h, int component)
 {
-  str_grid_patch_filler_vtable vtable;
+  robin_bc_t* robin = polymec_malloc(sizeof(robin_bc_t));
+  robin->A = A;
+  robin->B = B;
+  robin->C = C;
+  robin->h = h;
+  robin->component = component;
+  return robin;
+}
+
+str_grid_patch_filler_t* robin_bc_str_grid_patch_filler_new(real_t A, 
+                                                            real_t B, 
+                                                            real_t C,
+                                                            real_t h,
+                                                            int component,
+                                                            str_grid_patch_boundary_t patch_boundary)
+{
+  ASSERT((A != 0.0) || (B != 0.0) || (C != 0.0));
+  ASSERT(h > 0.0);
+  ASSERT(component >= 0);
+
+  robin_bc_t* robin = robin_bc_new(A, B, C, h, component);
+  str_grid_patch_filler_vtable vtable = {.dtor = polymec_free};
   switch(patch_boundary)
   {
-    case STR_GRID_PATCH_X1_BOUNDARY: vtable.start_filling_cells = zf_x1; break;
-    case STR_GRID_PATCH_X2_BOUNDARY: vtable.start_filling_cells = zf_x2; break;
-    case STR_GRID_PATCH_Y1_BOUNDARY: vtable.start_filling_cells = zf_y1; break;
-    case STR_GRID_PATCH_Y2_BOUNDARY: vtable.start_filling_cells = zf_y2; break;
-    case STR_GRID_PATCH_Z1_BOUNDARY: vtable.start_filling_cells = zf_z1; break;
-    case STR_GRID_PATCH_Z2_BOUNDARY: vtable.start_filling_cells = zf_z2; break;
+    case STR_GRID_PATCH_X1_BOUNDARY: vtable.start_filling_cells = robin_x1; break;
+    case STR_GRID_PATCH_X2_BOUNDARY: vtable.start_filling_cells = robin_x2; break;
+    case STR_GRID_PATCH_Y1_BOUNDARY: vtable.start_filling_cells = robin_y1; break;
+    case STR_GRID_PATCH_Y2_BOUNDARY: vtable.start_filling_cells = robin_y2; break;
+    case STR_GRID_PATCH_Z1_BOUNDARY: vtable.start_filling_cells = robin_z1; break;
+    case STR_GRID_PATCH_Z2_BOUNDARY: vtable.start_filling_cells = robin_z2; break;
   }
-  return str_grid_patch_filler_new("zero-flux patch filler", NULL, vtable);
+  char name[1025];
+  const char* boundaries[] = {"x1", "x2", "y1", "y2", "z1", "z2"};
+  if (A == 0.0)
+  {
+    snprintf(name, 1024, "Neumann BC (%g * dU/dn = %g, h = %g, component %d) on %s boundary", 
+             robin->B, robin->C, robin->h, robin->component, boundaries[patch_boundary]);
+  }
+  else if (robin->B == 0.0)
+  {
+    snprintf(name, 1024, "Dirichlet BC (%g * U = %g, component %d) on %s boundary", 
+             robin->A, robin->C, robin->component, boundaries[patch_boundary]);
+  }
+  else
+  {
+    snprintf(name, 1024, "Robin BC (%g * U + %g * dU/dn = %g, h = %g, component %d) on %s boundary", 
+             robin->A, robin->B, robin->C, robin->h, robin->component, boundaries[patch_boundary]);
+  }
+  return str_grid_patch_filler_new(name, robin, vtable);
+}
+
+str_grid_patch_filler_t* dirichlet_bc_str_grid_patch_filler_new(real_t F, 
+                                                                int component,
+                                                                str_grid_patch_boundary_t patch_boundary)
+{
+  return robin_bc_str_grid_patch_filler_new(1.0, 0.0, F, 1.0, component, patch_boundary);
+}
+
+str_grid_patch_filler_t* neumann_bc_str_grid_patch_filler_new(real_t A, 
+                                                              real_t B,
+                                                              real_t h,
+                                                              int component,
+                                                              str_grid_patch_boundary_t patch_boundary)
+{
+  return robin_bc_str_grid_patch_filler_new(0.0, A, B, h, component, patch_boundary);
 }
 

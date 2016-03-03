@@ -58,15 +58,48 @@ void str_grid_patch_filler_finish(str_grid_patch_filler_t* filler,
 //------------------------------------------------------------------------
 //                  Commonly-used grid patch fillers
 //------------------------------------------------------------------------
+// These patch fillers might be useful for your algorithm. All of these 
+// "vanilla" versions are assumed to be applied in logical coordinates
+// and not "physical" ones.
+//------------------------------------------------------------------------
 
 // Creates a patch filler that copies local values from one patch on a grid to 
 // another.
 str_grid_patch_filler_t* copy_str_grid_patch_filler_new(str_grid_patch_boundary_t src_boundary,
                                                         str_grid_patch_boundary_t dest_boundary);
 
-// Creates a patch filler that fills ghost cells so that there is zero flux 
-// through the given patch boundary.
-str_grid_patch_filler_t* zero_flux_str_grid_patch_filler_new(str_grid_patch_boundary_t patch_boundary);
+// Creates a patch filler that enforces a Robin boundary condition of the form
+//   A * U + B * dU/dn = C
+// on the given component of the solution U, by filling appropriate ghost cell 
+// values on a patch. If B is NULL, it will be set to the zero vector. Here, h is 
+// the grid spacing in the normal direction of the patch boundary specified, and 
+// dU/dn is the normal derivative of U in that same direction.
+str_grid_patch_filler_t* robin_bc_str_grid_patch_filler_new(real_t A, 
+                                                            real_t B, 
+                                                            real_t C, 
+                                                            real_t h,
+                                                            int component,
+                                                            str_grid_patch_boundary_t patch_boundary);
+
+// Creates a patch filler that enforces a Dirichlet boundary condition of the form
+//   U = F
+// on the given component of the solution U, by filling appropriate ghost cell values 
+// on a patch.
+str_grid_patch_filler_t* dirichlet_bc_str_grid_patch_filler_new(real_t F, 
+                                                                int component,
+                                                                str_grid_patch_boundary_t patch_boundary);
+
+// Creates a patch filler that enforces a Neumann boundary condition of the form
+//   A * dU/dn = B
+// on the given component of the solution U, by filling appropriate ghost cell 
+// values on a patch. Here, h is the grid spacing in the normal direction of the 
+// patch boundary specified, and dU/dn is the normal derivative of U in that same 
+// direction.
+str_grid_patch_filler_t* neumann_bc_str_grid_patch_filler_new(real_t A, 
+                                                              real_t B,
+                                                              real_t h,
+                                                              int component,
+                                                              str_grid_patch_boundary_t patch_boundary);
 
 #endif
 

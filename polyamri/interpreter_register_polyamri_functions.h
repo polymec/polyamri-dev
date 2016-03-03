@@ -11,15 +11,21 @@
 
 #include "model/interpreter.h"
 #include "polyamri/str_grid.h"
+#include "polyamri/str_grid_patch_filler.h"
 
 // This file contains additional functions for polymec's interpreter 
 // that augment its capabilities for use with polyamri.
+
+// Register the polyamri-specific constructors with the given interpreter.
+void interpreter_register_polyamri_functions(interpreter_t* interp);
 
 // Fetches the given structured grid from the interpreter, returning NULL if 
 // it is not found or if the given variable is not a structured grid.
 str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name);
 
-// Register the polyamri-specific constructors with the given interpreter.
-void interpreter_register_polyamri_functions(interpreter_t* interp);
+// Fetches the given patch filler from the interpreter, returning NULL if it 
+// is not found or if the given variable is not a patch filler. Patch fillers 
+// can be used to implement boundary conditions, for example.
+str_grid_patch_filler_t* interpreter_get_str_grid_patch_filler(interpreter_t* interp, const char* name);
 
 #endif

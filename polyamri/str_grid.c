@@ -17,8 +17,7 @@
 struct str_grid_t
 {
   // Intrinsic metadata.
-  int nx, ny, nz, px, py, pz;
-  bool x_periodic, y_periodic, z_periodic;
+  int npx, npy, npz, nx, ny, nz;
   
   // Information about which patches are present.
   int_unordered_set_t* patches;
@@ -31,29 +30,23 @@ struct str_grid_t
   string_ptr_unordered_map_t* properties;
 };
 
-str_grid_t* str_grid_new(int nx, int ny, int nz, 
-                         int px, int py, int pz, 
-                         bool periodic_in_x, 
-                         bool periodic_in_y, 
-                         bool periodic_in_z)
+str_grid_t* str_grid_new(int npx, int npy, int npz, 
+                         int nx, int ny, int nz)
 {
+  ASSERT(npx > 0);
+  ASSERT(npy > 0);
+  ASSERT(npz > 0);
   ASSERT(nx > 0);
   ASSERT(ny > 0);
   ASSERT(nz > 0);
-  ASSERT(px > 0);
-  ASSERT(py > 0);
-  ASSERT(pz > 0);
 
   str_grid_t* grid = polymec_malloc(sizeof(str_grid_t));
+  grid->npx = npx;
+  grid->npy = npy;
+  grid->npz = npz;
   grid->nx = nx;
   grid->ny = ny;
   grid->nz = nz;
-  grid->px = px;
-  grid->py = py;
-  grid->pz = pz;
-  grid->x_periodic = periodic_in_x;
-  grid->y_periodic = periodic_in_y;
-  grid->z_periodic = periodic_in_z;
   grid->patches = int_unordered_set_new();
   grid->patch_indices = NULL;
   grid->finalized = false;
@@ -90,11 +83,11 @@ void str_grid_finalize(str_grid_t* grid)
   // Make an array of indices for locally-present patches.
   grid->patch_indices = polymec_malloc(sizeof(int) * 3 * grid->patches->size);
   int l = 0;
-  for (int i = 0; i < grid->nx; ++i)
+  for (int i = 0; i < grid->npx; ++i)
   {
-    for (int j = 0; j < grid->ny; ++j)
+    for (int j = 0; j < grid->npy; ++j)
     {
-      for (int k = 0; k < grid->nz; ++k, ++l)
+      for (int k = 0; k < grid->npz; ++k, ++l)
       {
         grid->patch_indices[3*l]   = i;
         grid->patch_indices[3*l+1] = j;
@@ -131,26 +124,18 @@ bool str_grid_next_patch(str_grid_t* grid, int* pos, int* i, int* j, int* k)
   return result;
 }
 
-void str_grid_get_periodicity(str_grid_t* grid, bool* periodicity)
+void str_grid_get_extents(str_grid_t* grid, int* npx, int* npy, int* npz)
 {
-  ASSERT(periodicity != NULL);
-  periodicity[0] = grid->x_periodic;
-  periodicity[1] = grid->y_periodic;
-  periodicity[2] = grid->z_periodic;
+  *npx = grid->npx;
+  *npy = grid->npy;
+  *npz = grid->npz;
 }
 
-void str_grid_get_extents(str_grid_t* grid, int* nx, int* ny, int* nz)
+void str_grid_get_patch_size(str_grid_t* grid, int* nx, int* ny, int* nz)
 {
   *nx = grid->nx;
   *ny = grid->ny;
   *nz = grid->nz;
-}
-
-void str_grid_get_patch_size(str_grid_t* grid, int* pnx, int* pny, int* pnz)
-{
-  *pnx = grid->px;
-  *pny = grid->py;
-  *pnz = grid->pz;
 }
 
 int str_grid_num_patches(str_grid_t* grid)

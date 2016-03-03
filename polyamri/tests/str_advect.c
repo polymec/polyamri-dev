@@ -734,12 +734,12 @@ static void advect_setup(advect_t* adv)
 
   // We impose a zero flux on all boundaries, on the assumption that the 
   // solution is zero at the boundary.
-  str_grid_patch_filler_t* zero_flux_x1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X1_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_x2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_X2_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_y1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Y1_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_y2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Y2_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_z1 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z1_BOUNDARY);
-  str_grid_patch_filler_t* zero_flux_z2 = zero_flux_str_grid_patch_filler_new(STR_GRID_PATCH_Z2_BOUNDARY);
+  str_grid_patch_filler_t* zero_flux_x1 = neumann_bc_str_grid_patch_filler_new(1.0, 0.0, 1.0, 0, STR_GRID_PATCH_X1_BOUNDARY);
+  str_grid_patch_filler_t* zero_flux_x2 = neumann_bc_str_grid_patch_filler_new(1.0, 0.0, 1.0, 0, STR_GRID_PATCH_X2_BOUNDARY);
+  str_grid_patch_filler_t* zero_flux_y1 = neumann_bc_str_grid_patch_filler_new(1.0, 0.0, 1.0, 0, STR_GRID_PATCH_Y1_BOUNDARY);
+  str_grid_patch_filler_t* zero_flux_y2 = neumann_bc_str_grid_patch_filler_new(1.0, 0.0, 1.0, 0, STR_GRID_PATCH_Y2_BOUNDARY);
+  str_grid_patch_filler_t* zero_flux_z1 = neumann_bc_str_grid_patch_filler_new(1.0, 0.0, 1.0, 0, STR_GRID_PATCH_Z1_BOUNDARY);
+  str_grid_patch_filler_t* zero_flux_z2 = neumann_bc_str_grid_patch_filler_new(1.0, 0.0, 1.0, 0, STR_GRID_PATCH_Z2_BOUNDARY);
 
   str_grid_cell_filler_factory_t* factory = str_grid_cell_filler_factory_new(MPI_COMM_WORLD);
   adv->ghost_filler = str_grid_cell_filler_factory_ghost_filler(factory, adv->grid, 

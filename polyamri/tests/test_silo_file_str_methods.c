@@ -38,7 +38,7 @@ void test_write_str_grid(void** state)
 { 
   // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
   // and no periodicity.
-  str_grid_t* grid = str_grid_new(4, 4, 4, 10, 10, 10, false, false, false); 
+  str_grid_t* grid = str_grid_new(4, 4, 4, 10, 10, 10); 
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)
@@ -56,7 +56,7 @@ void test_write_str_grid_cell_data(void** state)
 { 
   // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
   // and no periodicity.
-  str_grid_t* grid = str_grid_new(4, 4, 4, 10, 10, 10, false, false, false); 
+  str_grid_t* grid = str_grid_new(4, 4, 4, 10, 10, 10); 
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       for (int k = 0; k < 4; ++k)

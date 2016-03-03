@@ -29,7 +29,7 @@ void test_ctor(void** state)
 void test_add_block(void** state)
 {
   str_grid_assembly_t* assembly = str_grid_assembly_new();
-  str_grid_t* block1 = str_grid_new(4, 4, 4, 16, 16, 16, false, false, false);
+  str_grid_t* block1 = str_grid_new(4, 4, 4, 16, 16, 16);
   str_grid_assembly_add_block(assembly, "block1", block1);
   assert_int_equal(1, str_grid_assembly_num_blocks(assembly));
   assert_true(str_grid_assembly_block(assembly, "NOT HERE!") == NULL);
@@ -56,9 +56,9 @@ void test_add_block(void** state)
 void test_connect_blocks(void** state)
 {
   str_grid_assembly_t* assembly = str_grid_assembly_new();
-  str_grid_t* block1 = str_grid_new(4, 4, 4, 16, 16, 16, false, false, false);
+  str_grid_t* block1 = str_grid_new(4, 4, 4, 16, 16, 16);
   str_grid_assembly_add_block(assembly, "block1", block1);
-  str_grid_t* block2 = str_grid_new(4, 4, 4, 16, 16, 16, false, false, false);
+  str_grid_t* block2 = str_grid_new(4, 4, 4, 16, 16, 16);
   str_grid_assembly_add_block(assembly, "block2", block2);
   assert_int_equal(2, str_grid_assembly_num_blocks(assembly));
   assert_true(str_grid_assembly_block(assembly, "NOT HERE!") == NULL);
