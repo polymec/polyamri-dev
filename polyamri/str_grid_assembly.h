@@ -45,8 +45,9 @@ str_grid_t* str_grid_assembly_block(str_grid_assembly_t* assembly,
                                     const char* block_name);
 
 // Traverses the blocks in the grid assembly. The neighbors of each block
-// are stored in their respective pointers (which are set to NULL if the block
-// has no neighbor on a given boundary). Set *pos to 0 to reset the iteration.
+// are stored in their respective non-NULL pointers (which are set to NULL if 
+// the block has no neighbor on a given boundary). Set *pos to 0 to reset the 
+// iteration.
 bool str_grid_assembly_next_block(str_grid_assembly_t* assembly, 
                                   int* pos, 
                                   char** block_name,
@@ -57,6 +58,14 @@ bool str_grid_assembly_next_block(str_grid_assembly_t* assembly,
                                   str_grid_t** block_y2_neighbor,
                                   str_grid_t** block_z1_neighbor,
                                   str_grid_t** block_z2_neighbor);
+
+// Traverses the patches in the grid assembly, returning true, the block (grid) 
+// containing the patch, and the next (i, j, k) triple if the traversal is 
+// complete, false otherwise. Set *pos to 0 to reset the iteration.
+bool str_grid_assembly_next_patch(str_grid_assembly_t* assembly,
+                                  int* pos, 
+                                  str_grid_t** block, 
+                                  int* i, int* j, int* k);
 
 #endif
 
