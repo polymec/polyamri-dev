@@ -30,7 +30,8 @@ header.write('extern "C" {\n')
 header.write('#endif\n\n')
 header.write('#include "polyamri/polyamri.h"\n')
 for h in c_headers:
-    header.write('#include "polyamri/%s"\n'%h)
+    if h != 'polyamri.h':
+        header.write('#include "polyamri/%s"\n'%h)
 header.write('\n')
 header.write('#ifdef __cplusplus\n')
 header.write('}\n')
