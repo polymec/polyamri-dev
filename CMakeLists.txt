@@ -49,6 +49,7 @@ configure_file(
 )
 install(FILES ${PROJECT_BINARY_DIR}/include/polyamri.h DESTINATION include/polymec)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/polyamri.cmake DESTINATION share/polymec)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/add_polyamri_library.cmake DESTINATION share/polymec)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/add_polyamri_executable.cmake DESTINATION share/polymec)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/add_polyamri_test.cmake DESTINATION share/polymec)
 
