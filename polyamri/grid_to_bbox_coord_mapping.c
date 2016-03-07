@@ -24,13 +24,13 @@ static void g2b_map_vector(void* context, point_t* x, vector_t* v, vector_t* v1)
   v1->z = v->z * (bbox->z2 - bbox->z1);
 }
 
-static void g2b_jacobian(void* context, point_t* x, real_t* J)
+static void g2b_jacobian(void* context, point_t* x, tensor2_t* J)
 {
   bbox_t* bbox = context;
-  J[0] = bbox->x2 - bbox->x1;
-  J[4] = bbox->y2 - bbox->y1;
-  J[8] = bbox->z2 - bbox->z1;
-  J[1] = J[2] = J[3] = J[5] = J[6] = J[7] = 0.0; // off-diagonals.
+  J->xx = bbox->x2 - bbox->x1;
+  J->yy = bbox->y2 - bbox->y1;
+  J->zz = bbox->z2 - bbox->z1;
+  J->xy = J->xz = J->yx = J->yz = J->zx = J->zy = 0.0; // off-diagonals.
 }
 
 // Inverse mapping.
@@ -50,13 +50,13 @@ static void b2g_map_vector(void* context, point_t* x, vector_t* v, vector_t* v1)
   v1->z = v->z / (bbox->z2 - bbox->z1);
 }
 
-static void b2g_jacobian(void* context, point_t* x, real_t* J)
+static void b2g_jacobian(void* context, point_t* x, tensor2_t* J)
 {
   bbox_t* bbox = context;
-  J[0] = 1.0 / (bbox->x2 - bbox->x1);
-  J[4] = 1.0 / (bbox->y2 - bbox->y1);
-  J[8] = 1.0 / (bbox->z2 - bbox->z1);
-  J[1] = J[2] = J[3] = J[5] = J[6] = J[7] = 0.0; // off-diagonals.
+  J->xx = 1.0 / (bbox->x2 - bbox->x1);
+  J->xy = 1.0 / (bbox->y2 - bbox->y1);
+  J->xz = 1.0 / (bbox->z2 - bbox->z1);
+  J->xy = J->xz = J->yx = J->yz = J->zx = J->zy = 0.0; // off-diagonals.
 }
 
 // Creation of inverse mappings.
