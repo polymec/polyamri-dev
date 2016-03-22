@@ -17,8 +17,10 @@
 //#error "MPI-3 is required for polyamri."
 //#endif
 
+#if POLYAMRI_MAJOR_VERSION > 0
 // The major version of polyamri must match that of polymec.
 #if POLYMEC_MAJOR_VERSION != POLYAMRI_MAJOR_VERSION
 #error "The installed major version of polymec differs from that of polyamri. Please make sure these versions match."
+#endif
 #endif
 
