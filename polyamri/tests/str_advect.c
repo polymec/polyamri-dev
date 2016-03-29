@@ -23,17 +23,6 @@
 // Uncomment this to use first-order upwinding.
 //#define ADVECT_FIRST_ORDER
 
-//------------------------------------------------------------------------
-//                  Lua functions specific to this model
-//------------------------------------------------------------------------
-#include "lua.h"
-#include "lualib.h"
-#include "lauxlib.h"
-
-//------------------------------------------------------------------------
-//                    End str_advect-specific Lua functions
-//------------------------------------------------------------------------
-
 // Flux limiters.
 static real_t no_limiter(real_t ratio, real_t omega, real_t delta)
 {

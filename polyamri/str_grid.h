@@ -14,7 +14,7 @@
 // This type is used to fill ghost cells in patches.
 typedef struct str_grid_patch_filler_t str_grid_patch_filler_t;
 
-// A structured grid is three-dimensional logically rectangular grid. It 
+// A structured grid is a three-dimensional logically rectangular grid. It 
 // consists of a set of uniformly-sized patches. The grid manages
 // these patches and their connectivity.
 typedef struct str_grid_t str_grid_t;
