@@ -11,6 +11,15 @@
 #include "core/st_func.h"
 #include "polyamri/str_grid_cell_solver.h"
 
+//------------------------------------------------------------------------
+//                   HYPRE linear solvers for structured grids
+//------------------------------------------------------------------------
+// All of these functions create HYPRE-enabled linear solvers. If the HYPRE 
+// library exists on the system within the directory given in hypre_path, and 
+// is properly installed, each function returns a pointer to a newly allocated 
+// HYPRE-enabled str_grid_cell_solver. Otherwise, the function returns NULL.
+//------------------------------------------------------------------------
+
 // Creates a solver that can solve a Helmholtz-like equation on the cells of 
 // a structured grid using HYPRE's SMG (simple multigrid) solver. The form of 
 // the linear system is 
@@ -20,7 +29,8 @@
 // where A is a linear operator, I is the identity operator, B and C are 
 // vectors, alpha, beta, gamma, delta, epsilon are scalar coefficients, and 
 // X is the solution vector.
-str_grid_cell_solver_t* hypre_smg_helmholtz_str_grid_cell_solver_new(str_grid_t* grid,
+str_grid_cell_solver_t* hypre_smg_helmholtz_str_grid_cell_solver_new(const char* hypre_dir,
+                                                                     str_grid_t* grid,
                                                                      int num_comps);
 
 // Sets the coefficients and operator information for the left hand side of 
