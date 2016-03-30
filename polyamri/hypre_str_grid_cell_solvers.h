@@ -24,12 +24,13 @@
 // a structured grid using HYPRE's SMG (simple multigrid) solver. The form of 
 // the linear system is 
 //
-// (alpha * I + beta * A) X = (gamma * I + delta * A) B + epsilon * C
+// (alpha*I + beta*K(x, t)*L) X = (gamma*I + delta*K(x, t)*L) B + epsilon*S(x, t)
 // 
-// where A is a linear operator, I is the identity operator, B and C are 
-// vectors, alpha, beta, gamma, delta, epsilon are scalar coefficients, and 
+// where L is the Laplacian operator, I is the identity operator, B is a  
+// vector, K and S are scalar functions of space and time, alpha, beta, gamma, delta, epsilon are scalar coefficients, and 
 // X is the solution vector.
 str_grid_cell_solver_t* hypre_smg_helmholtz_str_grid_cell_solver_new(const char* hypre_dir,
+                                                                     MPI_Comm comm,
                                                                      str_grid_t* grid,
                                                                      int num_comps);
 
@@ -39,7 +40,7 @@ void hypre_smg_helmholtz_str_grid_cell_solver_set_operator(str_grid_cell_solver_
                                                            real_t time, 
                                                            real_t alpha, 
                                                            real_t beta, 
-                                                           st_func_t* A);
+                                                           st_func_t* K);
 
 // Sets the coefficients and operator information for the right hand side of 
 // the Helmholtz equation.
@@ -47,10 +48,10 @@ void hypre_smg_helmholtz_str_grid_cell_solver_set_rhs(str_grid_cell_solver_t* so
                                                       real_t time,
                                                       real_t gamma, 
                                                       real_t delta, 
-                                                      st_func_t* A, 
-                                                      st_func_t* B, 
+                                                      st_func_t* K, 
+                                                      str_grid_cell_data_t* B, 
                                                       real_t epsilon, 
-                                                      st_func_t* C);
+                                                      st_func_t* S);
 
 #endif
 

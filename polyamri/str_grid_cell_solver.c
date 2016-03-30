@@ -10,6 +10,7 @@
 struct str_grid_cell_solver_t 
 {
   char* name;
+  MPI_Comm comm;
   void* context;
   str_grid_cell_solver_vtable vtable;
   str_grid_t* grid;
@@ -17,6 +18,7 @@ struct str_grid_cell_solver_t
 };
 
 str_grid_cell_solver_t* str_grid_cell_solver_new(const char* solver_name,
+                                                 MPI_Comm comm,
                                                  void* context,
                                                  str_grid_cell_solver_vtable vtable,
                                                  str_grid_t* grid,
@@ -26,6 +28,7 @@ str_grid_cell_solver_t* str_grid_cell_solver_new(const char* solver_name,
   ASSERT(num_comps > 0);
   str_grid_cell_solver_t* solver = polymec_malloc(sizeof(str_grid_cell_solver_t));
   solver->name = string_dup(solver_name);
+  solver->comm = comm;
   solver->context = context;
   solver->vtable = vtable;
   solver->grid = grid;

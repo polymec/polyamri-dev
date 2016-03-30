@@ -24,6 +24,7 @@ typedef struct
 // Creates a new grid solver using the given context and vtable, on the given 
 // grid, with a solution vector having the given number of components per cell.
 str_grid_cell_solver_t* str_grid_cell_solver_new(const char* solver_name,
+                                                 MPI_Comm comm,
                                                  void* context,
                                                  str_grid_cell_solver_vtable vtable,
                                                  str_grid_t* grid,
