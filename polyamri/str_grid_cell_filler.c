@@ -129,7 +129,7 @@ void str_grid_cell_filler_finish(str_grid_cell_filler_t* cell_filler, int token)
   ASSERT(op_tokens_p != NULL); // Token exists in our list?
   int_array_t* op_tokens = *op_tokens_p;
   ASSERT((op_tokens->size % 2) == 0); // Should be patch index/op token pairs
-  int n = op_tokens->size/2;
+  int n = (int)op_tokens->size/2;
   for (int l = 0; l < n; ++l)
   {
     int patch_index = op_tokens->data[2*n];
