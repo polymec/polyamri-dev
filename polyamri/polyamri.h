@@ -10,6 +10,9 @@
 
 #include "core/polymec.h"
 
+// This function writes version information to the given file descriptor.
+void polyamri_version_fprintf(const char* exe_name, FILE* stream);
+
 // Returns true if the given number is a power of 2, false otherwise.
 static inline bool is_power_of_2(int number)
 {

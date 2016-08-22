@@ -9,6 +9,14 @@
 // of polymec.
 
 #include "polyamri/polyamri.h"
+#include "polyamri/polyamri_version.h"
+
+void polyamri_version_fprintf(const char* exe_name, FILE* stream)
+{
+  if (stream == NULL) return;
+  fprintf(stream, "%s v%s\n", exe_name, POLYAMRI_VERSION);
+  (void)POLYAMRI_GIT_DIFFS;
+}
 
 // We're not relying on MPI-3 just yet.
 //// We use some fancy MPI-3 stuff in this here library.
