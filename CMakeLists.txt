@@ -34,6 +34,11 @@ set(CMAKE_BUILD_TYPE ${POLYMEC_BUILD_TYPE})
 set(CMAKE_MACOSX_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH "${POLYMEC_PREFIX}/lib")
 
+# Additional C flags.
+if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_C_FLAGS "${POLYMEC_C_FLAGS} -Wno-source-uses-openmp")
+endif()
+
 # Generate polyamri_version.h with the right version numbers.
 add_custom_target(update_version_h ALL
                   python ${POLYMEC_PREFIX}/share/polymec/update_version_h.py polyamri ${POLYAMRI_VERSION} ${PROJECT_BINARY_DIR}/polyamri/polyamri_version.h)

@@ -874,7 +874,7 @@ static void advect_plot(void* context, const char* prefix, const char* directory
   silo_file_close(silo);
 }
 
-static void advect_load(void* context, const char* prefix, const char* directory, real_t* t, int step)
+static noreturn void advect_load(void* context, const char* prefix, const char* directory, real_t* t, int step)
 {
   //advect_t* adv = context;
   POLYMEC_NOT_IMPLEMENTED;

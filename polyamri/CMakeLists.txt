@@ -13,6 +13,9 @@ add_polymec_library(polyamri polyamri.c
                     silo_file.c
                     interpreter_register_polyamri_functions.c)
 
+# polyamri.c depends on the creation of polyamri_version.h.
+add_dependencies(polyamri update_version_h)
+
 set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES} PARENT_SCOPE)
 set(POLYAMRI_LIBRARIES polyamri;${POLYMEC_LIBRARIES})
 
