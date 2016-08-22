@@ -73,11 +73,11 @@ static int copy_x1_to_x2(void* context,
 
   DECLARE_STR_GRID_PATCH_ARRAY(src_data, src_patch);
   DECLARE_STR_GRID_PATCH_ARRAY(dest_data, dest_patch);
-  for (int j = dest_patch->j1; j < dest_patch->j2; ++j)
-    for (int k = dest_patch->k1; k < dest_patch->k2; ++k)
+  for (int jj = dest_patch->j1; jj < dest_patch->j2; ++jj)
+    for (int kk = dest_patch->k1; kk < dest_patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[dest_patch->i2+g][j][k][c] = src_data[dest_patch->i1+g][j][k][c];
+          dest_data[dest_patch->i2+g][jj][kk][c] = src_data[dest_patch->i1+g][jj][kk][c];
 
   return -1;
 }
@@ -93,11 +93,11 @@ static int copy_x2_to_x1(void* context,
 
   DECLARE_STR_GRID_PATCH_ARRAY(src_data, src_patch);
   DECLARE_STR_GRID_PATCH_ARRAY(dest_data, dest_patch);
-  for (int j = dest_patch->j1; j < dest_patch->j2; ++j)
-    for (int k = dest_patch->k1; k < dest_patch->k2; ++k)
+  for (int jj = dest_patch->j1; jj < dest_patch->j2; ++jj)
+    for (int kk = dest_patch->k1; kk < dest_patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[dest_patch->i1-ng+g][j][k][c] = src_data[dest_patch->i2-ng+g][j][k][c];
+          dest_data[dest_patch->i1-ng+g][jj][kk][c] = src_data[dest_patch->i2-ng+g][jj][kk][c];
 
   return -1;
 }
@@ -113,11 +113,11 @@ static int copy_y1_to_y2(void* context,
 
   DECLARE_STR_GRID_PATCH_ARRAY(src_data, src_patch);
   DECLARE_STR_GRID_PATCH_ARRAY(dest_data, dest_patch);
-  for (int i = dest_patch->i1; i < dest_patch->i2; ++i)
-    for (int k = dest_patch->k1; k < dest_patch->k2; ++k)
+  for (int ii = dest_patch->i1; ii < dest_patch->i2; ++ii)
+    for (int kk = dest_patch->k1; kk < dest_patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[i][dest_patch->j2+g][k][c] = src_data[i][dest_patch->j1+g][k][c];
+          dest_data[ii][dest_patch->j2+g][kk][c] = src_data[ii][dest_patch->j1+g][kk][c];
 
   return -1;
 }
@@ -133,11 +133,11 @@ static int copy_y2_to_y1(void* context,
 
   DECLARE_STR_GRID_PATCH_ARRAY(src_data, src_patch);
   DECLARE_STR_GRID_PATCH_ARRAY(dest_data, dest_patch);
-  for (int i = dest_patch->i1; i < dest_patch->i2; ++i)
-    for (int k = dest_patch->k1; k < dest_patch->k2; ++k)
+  for (int ii = dest_patch->i1; ii < dest_patch->i2; ++ii)
+    for (int kk = dest_patch->k1; kk < dest_patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[i][dest_patch->j1-ng+g][k][c] = src_data[i][dest_patch->j2-ng+g][k][c];
+          dest_data[ii][dest_patch->j1-ng+g][kk][c] = src_data[ii][dest_patch->j2-ng+g][kk][c];
 
   return -1;
 }
@@ -153,11 +153,11 @@ static int copy_z1_to_z2(void* context,
 
   DECLARE_STR_GRID_PATCH_ARRAY(src_data, src_patch);
   DECLARE_STR_GRID_PATCH_ARRAY(dest_data, dest_patch);
-  for (int i = dest_patch->i1; i < dest_patch->i2; ++i)
-    for (int j = dest_patch->j1; j < dest_patch->j2; ++j)
+  for (int ii = dest_patch->i1; ii < dest_patch->i2; ++ii)
+    for (int jj = dest_patch->j1; jj < dest_patch->j2; ++jj)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[i][j][dest_patch->k2+g][c] = src_data[i][j][dest_patch->k1+g][c];
+          dest_data[ii][jj][dest_patch->k2+g][c] = src_data[ii][jj][dest_patch->k1+g][c];
 
   return -1;
 }
@@ -173,11 +173,11 @@ static int copy_z2_to_z1(void* context,
 
   DECLARE_STR_GRID_PATCH_ARRAY(src_data, src_patch);
   DECLARE_STR_GRID_PATCH_ARRAY(dest_data, dest_patch);
-  for (int i = dest_patch->i1; i < dest_patch->i2; ++i)
-    for (int j = dest_patch->j1; j < dest_patch->j2; ++j)
+  for (int ii = dest_patch->i1; ii < dest_patch->i2; ++ii)
+    for (int jj = dest_patch->j1; jj < dest_patch->j2; ++jj)
       for (int g = 0; g < ng; ++g)
         for (int c = 0; c < nc; ++c)
-          dest_data[i][j][dest_patch->k1-ng+g][c] = src_data[i][j][dest_patch->k2-ng+g][c];
+          dest_data[ii][jj][dest_patch->k1-ng+g][c] = src_data[ii][jj][dest_patch->k2-ng+g][c];
 
   return -1;
 }
@@ -254,10 +254,10 @@ static int robin_x1(void* context,
   real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
-  for (int j = patch->j1; j < patch->j2; ++j)
-    for (int k = patch->k1; k < patch->k2; ++k)
+  for (int jj = patch->j1; jj < patch->j2; ++jj)
+    for (int kk = patch->k1; kk < patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
-        data[patch->i1-g][j][k][c] = (robin->C - num * data[patch->i1+ng-g][j][k][c]) / denom;
+        data[patch->i1-g][jj][kk][c] = (robin->C - num * data[patch->i1+ng-g][jj][kk][c]) / denom;
 
   return -1;
 }
@@ -274,10 +274,10 @@ static int robin_x2(void* context,
   real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
-  for (int j = patch->j1; j < patch->j2; ++j)
-    for (int k = patch->k1; k < patch->k2; ++k)
+  for (int jj = patch->j1; jj < patch->j2; ++jj)
+    for (int kk = patch->k1; kk < patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
-        data[patch->i2+g][j][k][c] = (robin->C - num * data[patch->i2-ng+g][j][k][c]) / denom;
+        data[patch->i2+g][jj][kk][c] = (robin->C - num * data[patch->i2-ng+g][jj][kk][c]) / denom;
 
   return -1;
 }
@@ -294,10 +294,10 @@ static int robin_y1(void* context,
   real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
-  for (int i = patch->i1; i < patch->i2; ++i)
-    for (int k = patch->k1; k < patch->k2; ++k)
+  for (int ii = patch->i1; ii < patch->i2; ++ii)
+    for (int kk = patch->k1; kk < patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
-        data[i][patch->j1-g][k][c] = (robin->C - num * data[i][patch->j1+ng-g][k][c]) / denom;
+        data[ii][patch->j1-g][kk][c] = (robin->C - num * data[ii][patch->j1+ng-g][kk][c]) / denom;
 
   return -1;
 }
@@ -314,10 +314,10 @@ static int robin_y2(void* context,
   real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
-  for (int i = patch->i1; i < patch->i2; ++i)
-    for (int k = patch->k1; k < patch->k2; ++k)
+  for (int ii = patch->i1; ii < patch->i2; ++ii)
+    for (int kk = patch->k1; kk < patch->k2; ++kk)
       for (int g = 0; g < ng; ++g)
-        data[i][patch->j2+g][k][c] = (robin->C - num * data[i][patch->j2-ng+g][k][c]) / denom;
+        data[ii][patch->j2+g][kk][c] = (robin->C - num * data[ii][patch->j2-ng+g][kk][c]) / denom;
 
   return -1;
 }
@@ -334,10 +334,10 @@ static int robin_z1(void* context,
   real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
-  for (int i = patch->i1; i < patch->i2; ++i)
-    for (int j = patch->j1; j < patch->j2; ++j)
+  for (int ii = patch->i1; ii < patch->i2; ++ii)
+    for (int jj = patch->j1; jj < patch->j2; ++jj)
       for (int g = 0; g < ng; ++g)
-        data[i][j][patch->k2-g][c] = (robin->C - num * data[i][j][patch->k2+ng-g][c]) / denom;
+        data[ii][jj][patch->k2-g][c] = (robin->C - num * data[ii][jj][patch->k2+ng-g][c]) / denom;
 
   return -1;
 }
@@ -354,10 +354,10 @@ static int robin_z2(void* context,
   real_t denom = 0.5 * robin->A + robin->B/robin->h;
 
   DECLARE_STR_GRID_PATCH_ARRAY(data, patch);
-  for (int i = patch->i1; i < patch->i2; ++i)
-    for (int j = patch->j1; j < patch->j2; ++j)
+  for (int ii = patch->i1; ii < patch->i2; ++ii)
+    for (int jj = patch->j1; jj < patch->j2; ++jj)
       for (int g = 0; g < ng; ++g)
-        data[i][j][patch->k2+g][c] = (robin->C - num * data[i][j][patch->k2-ng+g][c]) / denom;
+        data[ii][jj][patch->k2+g][c] = (robin->C - num * data[ii][jj][patch->k2-ng+g][c]) / denom;
 
   return -1;
 }
@@ -380,7 +380,7 @@ str_grid_patch_filler_t* robin_bc_str_grid_patch_filler_new(real_t A,
                                                             int component,
                                                             str_grid_patch_boundary_t patch_boundary)
 {
-  ASSERT((A != 0.0) || (B != 0.0) || (C != 0.0));
+  ASSERT(reals_equal(A, 0.0) || reals_equal(B, 0.0) || reals_equal(C, 0.0));
   ASSERT(h > 0.0);
   ASSERT(component >= 0);
 
@@ -397,12 +397,12 @@ str_grid_patch_filler_t* robin_bc_str_grid_patch_filler_new(real_t A,
   }
   char name[1025];
   const char* boundaries[] = {"x1", "x2", "y1", "y2", "z1", "z2"};
-  if (A == 0.0)
+  if (reals_equal(A, 0.0))
   {
     snprintf(name, 1024, "Neumann BC (%g * dU/dn = %g, h = %g, component %d) on %s boundary", 
              robin->B, robin->C, robin->h, robin->component, boundaries[patch_boundary]);
   }
-  else if (robin->B == 0.0)
+  else if (reals_equal(robin->B, 0.0))
   {
     snprintf(name, 1024, "Dirichlet BC (%g * U = %g, component %d) on %s boundary", 
              robin->A, robin->C, robin->component, boundaries[patch_boundary]);

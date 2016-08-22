@@ -16,7 +16,7 @@
 typedef struct str_grid_assembly_t str_grid_assembly_t;
 
 // Creates a new empty structured grid assembly.
-str_grid_assembly_t* str_grid_assembly_new();
+str_grid_assembly_t* str_grid_assembly_new(void);
 
 // Destroys the given grid assembly and all of its blocks.
 void str_grid_assembly_free(str_grid_assembly_t* assembly);

@@ -13,7 +13,7 @@
 #include "polyamri/silo_file.h"
 #include "polyamri/grid_to_bbox_coord_mapping.h"
 
-void test_write_str_grid_patch(void** state) 
+static void test_write_str_grid_patch(void** state) 
 { 
   str_grid_patch_t* patch = str_grid_patch_new(10, 10, 10, 1, 0); 
   DECLARE_STR_GRID_PATCH_ARRAY(a, patch);
@@ -34,7 +34,7 @@ void test_write_str_grid_patch(void** state)
   str_grid_patch_free(patch); 
 } 
 
-void test_write_str_grid(void** state) 
+static void test_write_str_grid(void** state) 
 { 
   // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
   // and no periodicity.
@@ -52,7 +52,7 @@ void test_write_str_grid(void** state)
   str_grid_free(grid); 
 } 
 
-void test_write_str_grid_cell_data(void** state) 
+static void test_write_str_grid_cell_data(void** state) 
 { 
   // Make a grid of 4x4x4 patches, each with 10x10x10 cells, 
   // and no periodicity.

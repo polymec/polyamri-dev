@@ -12,7 +12,7 @@
 #include "cmocka.h"
 #include "polyamri/str_grid_patch.h"
 
-void test_str_grid_patch_without_ghosts(void** state) 
+static void test_str_grid_patch_without_ghosts(void** state) 
 { 
   str_grid_patch_t* patch = str_grid_patch_new(10, 10, 10, 4, 0); 
   assert_int_equal(10, patch->i2 - patch->i1);
@@ -27,11 +27,11 @@ void test_str_grid_patch_without_ghosts(void** state)
         for (int l = 0; l < 4; ++l)
           a[i][j][k][l] = (real_t)(10*10*4*i + 10*4*j + 4*k + l);
   for (int i = 0; i < 10*10*10*4; ++i)
-    assert_true(a[0][0][0][i] == (real_t)i);
+    assert_true(reals_equal(a[0][0][0][i], (real_t)i));
   str_grid_patch_free(patch); 
 } 
 
-void test_str_grid_patch_with_ghosts(void** state) 
+static void test_str_grid_patch_with_ghosts(void** state) 
 { 
   str_grid_patch_t* patch = str_grid_patch_new(10, 10, 10, 4, 1); 
   assert_int_equal(10, patch->i2 - patch->i1);

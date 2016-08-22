@@ -44,7 +44,7 @@ int str_grid_node_data_num_ghost_layers(str_grid_node_data_t* node_data);
 int str_grid_node_data_num_patches(str_grid_node_data_t* node_data);
 
 // Returns the number of nodes in the str_grid_node_data object. 
-int str_grid_node_data_num_cells(str_grid_node_data_t* node_data);
+int str_grid_node_data_num_nodes(str_grid_node_data_t* node_data);
 
 // Returns an internal pointer to the given object's underlying str_grid.
 str_grid_t* str_grid_node_data_grid(str_grid_node_data_t* node_data);

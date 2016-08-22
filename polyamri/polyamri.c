@@ -8,7 +8,6 @@
 // This file really only checks that the version of polyamri matches that 
 // of polymec.
 
-#include "core/polymec_version.h"
 #include "polyamri/polyamri.h"
 
 // We're not relying on MPI-3 just yet.
@@ -19,6 +18,7 @@
 
 #if POLYAMRI_MAJOR_VERSION > 0
 // The major version of polyamri must match that of polymec.
+#include "core/polymec_version.h"
 #if POLYMEC_MAJOR_VERSION != POLYAMRI_MAJOR_VERSION
 #error "The installed major version of polymec differs from that of polyamri. Please make sure these versions match."
 #endif

@@ -12,7 +12,7 @@
 #include "cmocka.h"
 #include "polyamri/str_grid.h"
 
-void test_ctor(void** state) 
+static void test_ctor(void** state) 
 {
   str_grid_t* grid = str_grid_new(4, 4, 4, 16, 16, 16);
   assert_int_equal(0, str_grid_num_patches(grid));

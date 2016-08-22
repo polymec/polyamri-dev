@@ -12,7 +12,7 @@
 #include "cmocka.h"
 #include "polyamri/str_grid_assembly.h"
 
-void test_ctor(void** state) 
+static void test_ctor(void** state) 
 {
   str_grid_assembly_t* assembly = str_grid_assembly_new();
   assert_int_equal(0, str_grid_assembly_num_blocks(assembly));
@@ -26,7 +26,7 @@ void test_ctor(void** state)
   str_grid_assembly_free(assembly);
 }
 
-void test_add_block(void** state)
+static void test_add_block(void** state)
 {
   str_grid_assembly_t* assembly = str_grid_assembly_new();
   str_grid_t* block1 = str_grid_new(4, 4, 4, 16, 16, 16);
@@ -53,7 +53,7 @@ void test_add_block(void** state)
   str_grid_assembly_free(assembly);
 }
 
-void test_connect_blocks(void** state)
+static void test_connect_blocks(void** state)
 {
   str_grid_assembly_t* assembly = str_grid_assembly_new();
   str_grid_t* block1 = str_grid_new(4, 4, 4, 16, 16, 16);

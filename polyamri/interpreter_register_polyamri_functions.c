@@ -305,6 +305,7 @@ static int neumann_bc(lua_State* lua)
   return 1;
 }
 
+void interpreter_register_polyamri_functions(interpreter_t* interp);
 void interpreter_register_polyamri_functions(interpreter_t* interp)
 {
   structured_grid_type_code = interpreter_new_user_defined_type_code(interp);
@@ -317,11 +318,13 @@ void interpreter_register_polyamri_functions(interpreter_t* interp)
   interpreter_register_global_method(interp, "structured_grids", "neumann_bc", neumann_bc, docstring_from_string(neumann_bc_usage));
 }
 
+str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name);
 str_grid_t* interpreter_get_str_grid(interpreter_t* interp, const char* name)
 {
   return interpreter_get_user_defined(interp, name, structured_grid_type_code);
 }
 
+str_grid_patch_filler_t* interpreter_get_str_grid_patch_filler(interpreter_t* interp, const char* name);
 str_grid_patch_filler_t* interpreter_get_str_grid_patch_filler(interpreter_t* interp, const char* name)
 {
   return interpreter_get_user_defined(interp, name, patch_filler_type_code);

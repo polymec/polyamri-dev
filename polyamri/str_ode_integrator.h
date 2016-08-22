@@ -59,6 +59,9 @@ char* str_ode_integrator_name(str_ode_integrator_t* integ);
 // Returns the underlying context pointer.
 void* str_ode_integrator_context(str_ode_integrator_t* integ);
 
+// Returns the order of accuracy for the integrator.
+int str_ode_integrator_order(str_ode_integrator_t* integ);
+
 // Sets the maximum time step size for the next integration step.
 void str_ode_integrator_set_max_dt(str_ode_integrator_t* integ, real_t max_dt);
 

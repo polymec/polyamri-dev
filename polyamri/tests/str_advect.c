@@ -153,7 +153,7 @@ static real_t ark_max_dt(void* context, real_t t, str_grid_cell_data_t* U)
   advect_t* adv = context;
   real_t dx = MIN(adv->dx, MIN(adv->dy, adv->dz));
 
-  if ((adv->V_max == -FLT_MAX) || !st_func_is_constant(adv->V_func))
+  if (reals_equal(adv->V_max, -FLT_MAX) || !st_func_is_constant(adv->V_func))
   {
     // We compute the maximum allowable timestep using the CFL condition, 
     // measuring the velocity at each of the face centers at the given time and 
@@ -259,9 +259,9 @@ static void advect_clear(advect_t* adv)
 
 static void extrapolate_U_to_faces(advect_t* adv,
                                    real_t t,
-                                   str_grid_cell_data_t* U,
-                                   str_grid_cell_data_t* UL,
-                                   str_grid_cell_data_t* UH,
+                                   str_grid_cell_data_t* U_cell,
+                                   str_grid_cell_data_t* U_low,
+                                   str_grid_cell_data_t* U_high,
                                    str_grid_face_data_t* V)
 {
   real_t dx = adv->dx, dy = adv->dy, dz = adv->dz;
@@ -275,9 +275,9 @@ static void extrapolate_U_to_faces(advect_t* adv,
   #pragma omp parallel firstprivate(pos) private(ip, jp, kp, V_patch, bbox)
   while (str_grid_face_data_next_x_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
-    str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
-    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
-    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* U_patch = str_grid_cell_data_patch(U_cell, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(U_low, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(U_high, ip, jp, kp);
 
     // Compute "low" and "high" values of U on the x-faces of the cells.
     DECLARE_STR_GRID_PATCH_ARRAY(U, U_patch);
@@ -355,9 +355,9 @@ static void extrapolate_U_to_faces(advect_t* adv,
   #pragma omp parallel firstprivate(pos) private(ip, jp, kp, V_patch, bbox)
   while (str_grid_face_data_next_y_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
-    str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
-    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
-    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* U_patch = str_grid_cell_data_patch(U_cell, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(U_low, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(U_high, ip, jp, kp);
 
     // Compute "low" and "high" values of U on the y-faces of the cells.
     DECLARE_STR_GRID_PATCH_ARRAY(U, U_patch);
@@ -435,9 +435,9 @@ static void extrapolate_U_to_faces(advect_t* adv,
   #pragma omp parallel firstprivate(pos) private(ip, jp, kp, V_patch, bbox)
   while (str_grid_face_data_next_z_patch(V, &pos, &ip, &jp, &kp, &V_patch, &bbox))
   {
-    str_grid_patch_t* U_patch = str_grid_cell_data_patch(U, ip, jp, kp);
-    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
-    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* U_patch = str_grid_cell_data_patch(U_cell, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(U_low, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(U_high, ip, jp, kp);
 
     // Compute "low" and "high" values of U on the x-faces of the cells.
     DECLARE_STR_GRID_PATCH_ARRAY(U, U_patch);
@@ -513,8 +513,8 @@ static void extrapolate_U_to_faces(advect_t* adv,
                       
 static void compute_fluxes(advect_t* adv,
                            real_t t,
-                           str_grid_cell_data_t* UL,
-                           str_grid_cell_data_t* UH,
+                           str_grid_cell_data_t* U_low,
+                           str_grid_cell_data_t* U_high,
                            str_grid_face_data_t* V,
                            str_grid_face_data_t* F)
 {
@@ -530,8 +530,8 @@ static void compute_fluxes(advect_t* adv,
   #pragma omp parallel firstprivate(pos) private(ip, jp, kp, F_patch, bbox)
   while (str_grid_face_data_next_x_patch(F, &pos, &ip, &jp, &kp, &F_patch, &bbox))
   {
-    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
-    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(U_low, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(U_high, ip, jp, kp);
     str_grid_patch_t* Vx_patch = str_grid_face_data_x_patch(V, ip, jp, kp);
 
     DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
@@ -548,9 +548,9 @@ static void compute_fluxes(advect_t* adv,
           int ic, jc, kc; // <-- cell indices
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
-          real_t V = Vx[i][j][k][0];
-          real_t U_flux = (V >= 0.0) ? UH[ic-1][jc][kc][0] : UL[ic][jc][kc][0];
-          Fx[i][j][k][0] = Ax * V * U_flux;
+          real_t Vijk = Vx[i][j][k][0];
+          real_t U_flux = (Vijk >= 0.0) ? UH[ic-1][jc][kc][0] : UL[ic][jc][kc][0];
+          Fx[i][j][k][0] = Ax * Vijk * U_flux;
         }
       }
     }
@@ -561,8 +561,8 @@ static void compute_fluxes(advect_t* adv,
   #pragma omp parallel firstprivate(pos) private(ip, jp, kp, F_patch, bbox)
   while (str_grid_face_data_next_y_patch(F, &pos, &ip, &jp, &kp, &F_patch, &bbox))
   {
-    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
-    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(U_low, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(U_high, ip, jp, kp);
     str_grid_patch_t* Vy_patch = str_grid_face_data_y_patch(V, ip, jp, kp);
 
     DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
@@ -579,9 +579,9 @@ static void compute_fluxes(advect_t* adv,
           int ic, jc, kc; // <-- cell indices
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
-          real_t V = Vy[i][j][k][0];
-          real_t U_flux = (V >= 0.0) ? UH[ic][jc-1][kc][1] : UL[ic][jc][kc][1];
-          Fy[i][j][k][0] = Ay * V * U_flux;
+          real_t Vijk = Vy[i][j][k][0];
+          real_t U_flux = (Vijk >= 0.0) ? UH[ic][jc-1][kc][1] : UL[ic][jc][kc][1];
+          Fy[i][j][k][0] = Ay * Vijk * U_flux;
         }
       }
     }
@@ -592,8 +592,8 @@ static void compute_fluxes(advect_t* adv,
   #pragma omp parallel firstprivate(pos) private(ip, jp, kp, F_patch, bbox)
   while (str_grid_face_data_next_z_patch(F, &pos, &ip, &jp, &kp, &F_patch, &bbox))
   {
-    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(UL, ip, jp, kp);
-    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(UH, ip, jp, kp);
+    str_grid_patch_t* UL_patch = str_grid_cell_data_patch(U_low, ip, jp, kp);
+    str_grid_patch_t* UH_patch = str_grid_cell_data_patch(U_high, ip, jp, kp);
     str_grid_patch_t* Vz_patch = str_grid_face_data_z_patch(V, ip, jp, kp);
 
     DECLARE_STR_GRID_PATCH_ARRAY(UL, UL_patch);
@@ -609,9 +609,9 @@ static void compute_fluxes(advect_t* adv,
           int ic, jc, kc; // <-- cell indices
           str_grid_patch_translate_indices(F_patch, i, j, k,
                                            UL_patch, &ic, &jc, &kc);
-          real_t V = Vz[i][j][k][0];
-          real_t U_flux = (V >= 0.0) ? UH[ic][jc][kc-1][2] : UL[ic][jc][kc][2];
-          Fz[i][j][k][0] = Az * V * U_flux;
+          real_t Vijk = Vz[i][j][k][0];
+          real_t U_flux = (Vijk >= 0.0) ? UH[ic][jc][kc-1][2] : UL[ic][jc][kc][2];
+          Fz[i][j][k][0] = Az * Vijk * U_flux;
         }
       }
     }
@@ -650,7 +650,7 @@ static int advect_rhs(void* context,
     str_grid_patch_t* Fx_patch = str_grid_face_data_x_patch(adv->F, ip, jp, kp);
     str_grid_patch_t* Fy_patch = str_grid_face_data_y_patch(adv->F, ip, jp, kp);
     str_grid_patch_t* Fz_patch = str_grid_face_data_z_patch(adv->F, ip, jp, kp);
-    DECLARE_STR_GRID_PATCH_ARRAY(dUdt, rhs_patch);
+    DECLARE_STR_GRID_PATCH_ARRAY(U_dot, rhs_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fx, Fx_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fy, Fy_patch);
     DECLARE_STR_GRID_PATCH_ARRAY(Fz, Fz_patch);
@@ -676,7 +676,7 @@ static int advect_rhs(void* context,
           real_t div_F = Fx[ifx+1][jfx][kfx][0] - Fx[ifx][jfx][kfx][0] + 
                          Fy[ify][jfy+1][kfy][0] - Fy[ify][jfy][kfy][0] + 
                          Fz[ifz][jfz][kfz+1][0] - Fz[ifz][jfz][kfz][0];
-          dUdt[i][j][k][0] = -div_F / V;
+          U_dot[i][j][k][0] = -div_F / V;
         }
       }
     }
@@ -876,7 +876,7 @@ static void advect_plot(void* context, const char* prefix, const char* directory
 
 static void advect_load(void* context, const char* prefix, const char* directory, real_t* t, int step)
 {
-  advect_t* adv = context;
+  //advect_t* adv = context;
   POLYMEC_NOT_IMPLEMENTED;
 }
 
