@@ -119,7 +119,9 @@ static hypre_lib_t* get_hypre(const char* hypre_dir)
     polymec_error("get_hypre: %s.", msg);
   }
 
-#if APPLE
+  hypre_lib_t* hypre_lib = NULL;
+
+#if defined(APPLE) && APPLE
   // Mac-specific trick: 
   // If the HYPRE library is parallel, it will contain a reference to MPI symbols, 
   // even if those symbols are not defined within the library itself.
@@ -164,7 +166,7 @@ static hypre_lib_t* get_hypre(const char* hypre_dir)
   }
 
   // Allocate our HYPRE library object.
-  hypre_lib_t* hypre_lib = polymec_malloc(sizeof(hypre_lib_t));
+  hypre_lib = polymec_malloc(sizeof(hypre_lib_t));
   hypre_lib->lib = hypre;
 
   // Get the symbols.
@@ -231,7 +233,8 @@ static hypre_lib_t* get_hypre(const char* hypre_dir)
 
 failure:
   dlclose(hypre);
-  polymec_free(hypre_lib);
+  if (hypre_lib != NULL)
+    polymec_free(hypre_lib);
   return NULL;
 }
 
