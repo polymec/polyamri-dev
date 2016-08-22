@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "gc/gc.h"
+#include "core/polymec.h"
 #include "core/unordered_map.h"
 #include "core/tuple.h"
 #include "polyamri/str_grid_patch_filler.h"
@@ -188,7 +189,7 @@ str_grid_patch_filler_t* copy_str_grid_patch_filler_new(str_grid_patch_boundary_
   ASSERT(src_boundary != dest_boundary);
 
   char name[1025];
-  str_grid_patch_filler_vtable vtable;
+  str_grid_patch_filler_vtable vtable = {.dtor = NULL};
   if (src_boundary == STR_GRID_PATCH_X1_BOUNDARY)
   {
     ASSERT(dest_boundary == STR_GRID_PATCH_X2_BOUNDARY);
